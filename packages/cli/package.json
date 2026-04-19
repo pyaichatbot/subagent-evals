@@ -1,0 +1,30 @@
+{
+  "name": "@subagent-evals/cli",
+  "version": "0.1.0",
+  "author": "Praveen Yellamaraju <pyaichatbot@gmail.com>",
+  "type": "module",
+  "bin": {
+    "subagent-evals": "./dist/bin/subagent-evals.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@subagent-evals/core": "workspace:*",
+    "@subagent-evals/report-html": "workspace:*",
+    "commander": "14.0.3",
+    "js-yaml": "4.1.1"
+  }
+}

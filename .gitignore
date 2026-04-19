@@ -1,0 +1,11 @@
+node_modules
+.pnpm-store
+dist
+build
+coverage
+out
+*.log
+*.lock
+*.env
+*.local
+*.tsbuildinfo
