@@ -125,7 +125,7 @@ export async function runCli(argv: string[]): Promise<void> {
       process.stdout.write(`  format: ${options.format}\n`);
       process.stdout.write("  config: subagent-evals.config.yaml\n");
       process.stdout.write("  starter case: cases/starter.yaml\n");
-      process.stdout.write("\nRun: npx subagent-evals@latest lint .\n");
+      process.stdout.write("\nRun: node packages/cli/dist/bin/subagent-evals.js lint .\n");
     });
 
   program

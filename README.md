@@ -5,7 +5,8 @@
 Lint, eval, score, and ship agents for Claude Code, Codex, GitHub Copilot, Cursor, and Windsurf.
 
 ```bash
-npx subagent-evals@latest lint .
+pnpm build
+node packages/cli/dist/bin/subagent-evals.js lint .
 ```
 
 Maintainer: **Praveen Yellamaraju**  
@@ -32,26 +33,38 @@ Auto-detects all agent formats in your repo. Works with every major AI coding to
 
 ## Quickstart
 
+The published npm command is not live until the CLI package is released to npm. Today, local development usage is:
+
+```bash
+pnpm install
+pnpm build
+node packages/cli/dist/bin/subagent-evals.js lint .
+```
+
+After npm release, the same flows will be available via `npx subagent-evals@latest ...`.
+
+## CLI usage
+
 ```bash
 # Zero-config: auto-detects all formats in your repo
-npx subagent-evals@latest lint .
+node packages/cli/dist/bin/subagent-evals.js lint .
 
 # Initialize config
-npx subagent-evals@latest init
+node packages/cli/dist/bin/subagent-evals.js init
 
 # Full eval with runtime assertions
-npx subagent-evals@latest eval .
+node packages/cli/dist/bin/subagent-evals.js eval .
 
 # Generate badge / diff / comment artifacts
-npx subagent-evals@latest badge --input out/results.json --output out/badge.json
-npx subagent-evals@latest diff --current out/results.json --baseline out/base-results.json --output out/diff.json
-npx subagent-evals@latest comment --current out/results.json --baseline out/base-results.json --output out/pr-comment.md
+node packages/cli/dist/bin/subagent-evals.js badge --input out/results.json --output out/badge.json
+node packages/cli/dist/bin/subagent-evals.js diff --current out/results.json --baseline out/base-results.json --output out/diff.json
+node packages/cli/dist/bin/subagent-evals.js comment --current out/results.json --baseline out/base-results.json --output out/pr-comment.md
 
 # Generate HTML report from saved results
-npx subagent-evals@latest report --input out/results.json --output out/report.html
+node packages/cli/dist/bin/subagent-evals.js report --input out/results.json --output out/report.html
 
 # Submit to hosted leaderboard
-npx subagent-evals@latest submit --input out/results.json --output out/submission.json
+node packages/cli/dist/bin/subagent-evals.js submit --input out/results.json --output out/submission.json
 ```
 
 ## Configuration
@@ -85,6 +98,15 @@ thresholds:
 - Provider runners: `claude-code-runner`, `openai-runner`, `anthropic-runner`
 - Replay cache for deterministic CI runtime evals
 - Hosted package and local scaffold for GitHub Pages repo pages, leaderboard, registry, and crawl ingestion
+
+## Workflow packs and plugins
+
+`subagent-evals` stays generic. Workflow-specific orchestration packs should live outside this repo.
+
+- `multiagent-cli` owns its workflow prompts, commands, and eval fixtures
+- `@subagent-evals/plugin-multiagent` is the optional scaffolder for installing the `multiagent-cli` workflow into Claude/Codex-style repos
+
+This repo no longer vendors `multiagent-cli` integration fixtures under `integrations/`.
 
 ## Badge tiers
 

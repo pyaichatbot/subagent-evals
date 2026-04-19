@@ -5,8 +5,8 @@
 Scaffold config, starter cases, and sample agents.
 
 ```bash
-npx subagent-evals@latest init
-npx subagent-evals@latest init --format codex-md
+node packages/cli/dist/bin/subagent-evals.js init
+node packages/cli/dist/bin/subagent-evals.js init --format codex-md
 ```
 
 ## `discover`
@@ -14,7 +14,7 @@ npx subagent-evals@latest init --format codex-md
 Print normalized discovered agents as JSON.
 
 ```bash
-npx subagent-evals@latest discover .
+node packages/cli/dist/bin/subagent-evals.js discover .
 ```
 
 ## `lint`
@@ -22,7 +22,7 @@ npx subagent-evals@latest discover .
 Run static evaluation only.
 
 ```bash
-npx subagent-evals@latest lint .
+node packages/cli/dist/bin/subagent-evals.js lint .
 ```
 
 Exits non-zero when:
@@ -35,7 +35,7 @@ Exits non-zero when:
 Run static and runtime evaluation.
 
 ```bash
-npx subagent-evals@latest eval .
+node packages/cli/dist/bin/subagent-evals.js eval .
 ```
 
 Writes JSON, JUnit, HTML, and badge outputs.
@@ -50,7 +50,7 @@ Exits non-zero when:
 Generate Shields-compatible badge JSON from results.
 
 ```bash
-npx subagent-evals@latest badge --input out/results.json --output out/badge.json
+node packages/cli/dist/bin/subagent-evals.js badge --input out/results.json --output out/badge.json
 ```
 
 ## `diff`
@@ -58,7 +58,7 @@ npx subagent-evals@latest badge --input out/results.json --output out/badge.json
 Compare current results to a baseline.
 
 ```bash
-npx subagent-evals@latest diff \
+node packages/cli/dist/bin/subagent-evals.js diff \
   --current out/results.json \
   --baseline out/base-results.json \
   --output out/diff.json
@@ -69,7 +69,7 @@ npx subagent-evals@latest diff \
 Render a PR comment markdown artifact from current + baseline results.
 
 ```bash
-npx subagent-evals@latest comment \
+node packages/cli/dist/bin/subagent-evals.js comment \
   --current out/results.json \
   --baseline out/base-results.json \
   --output out/pr-comment.md
@@ -80,7 +80,7 @@ npx subagent-evals@latest comment \
 Render HTML from a saved results file.
 
 ```bash
-npx subagent-evals@latest report --input out/results.json --output out/report.html
+node packages/cli/dist/bin/subagent-evals.js report --input out/results.json --output out/report.html
 ```
 
 ## `submit`
@@ -88,13 +88,13 @@ npx subagent-evals@latest report --input out/results.json --output out/report.ht
 Create a hosted submission payload from saved results.
 
 ```bash
-npx subagent-evals@latest submit --input out/results.json --output out/submission.json
+node packages/cli/dist/bin/subagent-evals.js submit --input out/results.json --output out/submission.json
 ```
 
 Public submission metadata:
 
 ```bash
-npx subagent-evals@latest submit \
+node packages/cli/dist/bin/subagent-evals.js submit \
   --input out/results.json \
   --public \
   --owner pyaichatbot \

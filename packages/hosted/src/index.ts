@@ -655,7 +655,7 @@ export function renderIndexPage(
       </table>`
     : `<div class="empty-state">
         <p style="margin:0 0 .5rem;font-family:var(--serif);font-size:1.25rem;color:var(--ink)">No public submissions yet.</p>
-        <p style="margin:0">Be the first — run <span class="code">npx subagent-evals submit --public</span>.</p>
+        <p style="margin:0">Be the first — run <span class="code">node packages/cli/dist/bin/subagent-evals.js submit --public</span>.</p>
       </div>`;
 
   const content = `
@@ -669,11 +669,11 @@ export function renderIndexPage(
       </div>
 
       <section aria-label="Install">
-        <pre class="code-block"><span class="c"># Zero-config: auto-detects all formats in your repo</span>
-npx subagent-evals@latest lint .
+        <pre class="code-block"><span class="c"># Local CLI usage (npm publish pending)</span>
+node packages/cli/dist/bin/subagent-evals.js lint .
 
 <span class="c"># Public submission to the leaderboard</span>
-npx subagent-evals@latest submit --public --owner you --repo your-repo</pre>
+node packages/cli/dist/bin/subagent-evals.js submit --public --owner you --repo your-repo</pre>
       </section>
 
       <section aria-label="Value props" class="grid">

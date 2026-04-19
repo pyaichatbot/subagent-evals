@@ -8,6 +8,7 @@
 - [CLI Reference](./cli.md)
 - [Configuration](./configuration.md)
 - [GitHub Pages Hosting](./hosting.md)
+- [Plugins and Workflow Packs](./plugins.md)
 
 ## What lives here
 

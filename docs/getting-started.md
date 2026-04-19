@@ -2,17 +2,12 @@
 
 ## Install
 
-Use `npx` for zero-install usage:
-
-```bash
-npx subagent-evals@latest lint .
-```
-
-For local development in this repo:
+The npm package is not published yet. Use the local built CLI:
 
 ```bash
 pnpm install
 pnpm build
+node packages/cli/dist/bin/subagent-evals.js lint .
 ```
 
 ## Supported agent formats
@@ -31,25 +26,25 @@ pnpm build
 Initialize a starter project:
 
 ```bash
-npx subagent-evals@latest init
+node packages/cli/dist/bin/subagent-evals.js init
 ```
 
 Run static linting:
 
 ```bash
-npx subagent-evals@latest lint .
+node packages/cli/dist/bin/subagent-evals.js lint .
 ```
 
 Run a full evaluation:
 
 ```bash
-npx subagent-evals@latest eval .
+node packages/cli/dist/bin/subagent-evals.js eval .
 ```
 
 Generate an HTML report:
 
 ```bash
-npx subagent-evals@latest report --input out/results.json --output out/report.html
+node packages/cli/dist/bin/subagent-evals.js report --input out/results.json --output out/report.html
 ```
 
 ## Outputs
