@@ -93,8 +93,10 @@ async function persistSite() {
   const leaderboard = buildLeaderboard(submissions);
   await ensureDir(pagesDir);
   await writeFile(join(root, "leaderboard.json"), JSON.stringify(leaderboard, null, 2), "utf8");
+  await writeFile(join(pagesDir, "leaderboard.json"), JSON.stringify(leaderboard, null, 2), "utf8");
   const registry = submissions.filter((item) => item.attribution);
   await writeFile(registryPath, JSON.stringify(registry, null, 2), "utf8");
+  await writeFile(join(pagesDir, "registry.json"), JSON.stringify(registry, null, 2), "utf8");
   for (const item of registry) {
     const { ownerDir, repoPath: jsonPath } = safeRepoPath(
       item.attribution.owner,
@@ -118,6 +120,7 @@ async function persistSite() {
   );
   await writeFile(join(pagesDir, "robots.txt"), renderRobotsTxt(), "utf8");
   await writeFile(join(pagesDir, "sitemap.xml"), renderSitemap(leaderboard), "utf8");
+  await writeFile(join(pagesDir, ".nojekyll"), "", "utf8");
 }
 
 const server = createServer(async (req, res) => {

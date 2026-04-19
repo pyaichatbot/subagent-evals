@@ -9,3 +9,4 @@ out
 *.env
 *.local
 *.tsbuildinfo
+apps/hosted/data

@@ -19,4 +19,4 @@ node apps/hosted/server.mjs
 
 ## GitHub Pages
 
-Publish `apps/hosted/data/pages/` with GitHub Pages, or copy those generated files into your Pages publish directory in CI.
+`pnpm build:pages` generates the static site into `apps/hosted/data/pages/`. The repo ships with `.github/workflows/deploy-pages.yml`, which builds that directory and deploys it to GitHub Pages on every push to `main` or manual dispatch.
