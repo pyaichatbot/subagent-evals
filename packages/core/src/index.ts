@@ -1897,6 +1897,270 @@ export function createSubmissionPayload(input: {
   return payload;
 }
 
+// Top-20 JS packages commonly typosquatted (canonical names)
+const KNOWN_JS_PACKAGES = [
+  "lodash", "react", "express", "axios", "webpack", "babel", "eslint",
+  "typescript", "cross-env", "dotenv", "moment", "chalk", "commander",
+  "jest", "mocha", "prettier", "rimraf", "glob", "minimist", "semver"
+];
+
+// Top-10 Python packages commonly typosquatted (canonical names)
+const KNOWN_PY_PACKAGES = [
+  "requests", "numpy", "pandas", "flask", "django", "boto3",
+  "pytest", "pillow", "scipy", "setuptools"
+];
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, (_, i) =>
+    Array.from({ length: n + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
+  );
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (a[i - 1] === b[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1];
+      } else {
+        dp[i][j] = 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+      }
+    }
+  }
+  return dp[m][n];
+}
+
+function isSuspiciousPackageName(name: string, knownPackages: string[]): boolean {
+  // Exact match is fine
+  if (knownPackages.includes(name)) return false;
+  // Check if it's a single-edit-distance away from a known package name
+  for (const known of knownPackages) {
+    if (Math.abs(name.length - known.length) <= 1) {
+      const dist = levenshtein(name, known);
+      if (dist === 1) return true;
+    }
+  }
+  return false;
+}
+
+export async function evaluateSupplyChain(config: EvalConfig, cwd: string): Promise<AuditReport> {
+  const manifests = config.supply_chain?.manifests ?? [
+    "package.json", "pnpm-lock.yaml", "pyproject.toml", "requirements.txt"
+  ];
+  const findings: AuditFinding[] = [];
+  const foundManifests: string[] = [];
+
+  for (const manifest of manifests) {
+    const fullPath = resolve(cwd, manifest);
+    if (!existsSync(fullPath)) continue;
+
+    let content: string;
+    try {
+      content = await readFile(fullPath, "utf8");
+    } catch {
+      continue;
+    }
+    foundManifests.push(manifest);
+
+    if (manifest === "package.json") {
+      let parsed: Record<string, unknown>;
+      try {
+        parsed = JSON.parse(content) as Record<string, unknown>;
+      } catch {
+        continue;
+      }
+      const depSections = ["dependencies", "devDependencies"] as const;
+      for (const section of depSections) {
+        const deps = parsed[section];
+        if (!deps || typeof deps !== "object" || Array.isArray(deps)) continue;
+        for (const [pkgName, version] of Object.entries(deps as Record<string, unknown>)) {
+          const v = String(version ?? "");
+          if (v.startsWith("^") || v.startsWith("~")) {
+            findings.push({
+              id: "unpinned-dependency",
+              severity: "low",
+              message: `${manifest}: ${pkgName}@${v} is not pinned (starts with ^ or ~)`
+            });
+          }
+          if (isSuspiciousPackageName(pkgName, KNOWN_JS_PACKAGES)) {
+            findings.push({
+              id: "suspicious-package-name",
+              severity: "high",
+              message: `${manifest}: "${pkgName}" looks like a typosquatted package name`
+            });
+          }
+        }
+      }
+    } else if (manifest === "pnpm-lock.yaml" || manifest === "package-lock.json") {
+      // Check for non-npm/non-github registry URLs
+      const urlPattern = /resolved\s+"?(https?:\/\/[^\s"]+)"?/g;
+      let match: RegExpExecArray | null;
+      while ((match = urlPattern.exec(content)) !== null) {
+        const url = match[1];
+        if (
+          !url.startsWith("https://registry.npmjs.org") &&
+          !url.startsWith("https://registry.yarnpkg.com") &&
+          !url.startsWith("https://github.com") &&
+          !url.startsWith("https://codeload.github.com")
+        ) {
+          findings.push({
+            id: "suspicious-registry",
+            severity: "medium",
+            message: `${manifest}: resolved URL uses non-standard registry: ${url}`
+          });
+        }
+      }
+    } else if (manifest === "pyproject.toml") {
+      // Look for [tool.poetry.dependencies] or [project.dependencies] sections
+      // and check for unpinned ranges
+      const lines = content.split("\n");
+      let inDepSection = false;
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (/^\[/.test(trimmed)) {
+          inDepSection =
+            trimmed === "[tool.poetry.dependencies]" ||
+            trimmed === "[project.dependencies]" ||
+            trimmed === "[project.optional-dependencies]";
+        }
+        if (!inDepSection || !trimmed || trimmed.startsWith("#") || trimmed.startsWith("[")) continue;
+        // key = "value" or key = { version = ">=1.0" }
+        const simpleMatch = trimmed.match(/^([\w-]+)\s*=\s*"([^"]+)"/);
+        if (simpleMatch) {
+          const [, pkgName, versionSpec] = simpleMatch;
+          if (pkgName === "python") continue;
+          if (!versionSpec.includes("==")) {
+            findings.push({
+              id: "unpinned-dependency",
+              severity: "low",
+              message: `${manifest}: ${pkgName} version "${versionSpec}" is not pinned with ==`
+            });
+          }
+        }
+      }
+    } else if (manifest === "requirements.txt") {
+      const lines = content.split("\n");
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("-")) continue;
+        // Extract package name (before ==, >=, <=, !=, ~=, @, or [)
+        const pkgNameMatch = trimmed.match(/^([A-Za-z0-9_.-]+)/);
+        const pkgName = pkgNameMatch ? pkgNameMatch[1] : null;
+
+        if (!trimmed.includes("==")) {
+          findings.push({
+            id: "unpinned-dependency",
+            severity: "low",
+            message: `${manifest}: "${trimmed}" is not pinned with ==`
+          });
+        }
+        if (pkgName && isSuspiciousPackageName(pkgName.toLowerCase(), KNOWN_PY_PACKAGES)) {
+          findings.push({
+            id: "suspicious-package-name",
+            severity: "high",
+            message: `${manifest}: "${pkgName}" looks like a typosquatted package name`
+          });
+        }
+      }
+    }
+  }
+
+  const lowCount = findings.filter((f) => f.severity === "low").length;
+  const medCount = findings.filter((f) => f.severity === "medium").length;
+  const highCount = findings.filter((f) => f.severity === "high").length;
+  const score = Math.max(0, Math.min(1, 1.0 - lowCount * 0.1 - medCount * 0.2 - highCount * 0.3));
+
+  return {
+    schema_version: 1,
+    manifests: foundManifests,
+    score,
+    findings
+  };
+}
+
+export function verifyCorpusPack(
+  pack: unknown,
+  options?: { require_signed?: boolean }
+): CorpusVerificationResult {
+  const messages: string[] = [];
+  let valid = true;
+  let verified = false;
+  let signatureType: string | null = null;
+
+  if (!pack || typeof pack !== "object" || Array.isArray(pack)) {
+    return {
+      valid: false,
+      verified: false,
+      messages: ["Pack is not a valid object"]
+    };
+  }
+
+  const p = pack as Record<string, unknown>;
+
+  // Check required fields
+  const requiredFields = ["pack_id", "pack_version", "pack_type", "created_at", "cases"] as const;
+  for (const field of requiredFields) {
+    if (!(field in p) || p[field] === undefined || p[field] === null) {
+      valid = false;
+      messages.push(`Missing required field: ${field}`);
+    }
+  }
+
+  if ("cases" in p && !Array.isArray(p.cases)) {
+    valid = false;
+    messages.push("Field 'cases' must be an array");
+  }
+
+  // Check pack_type
+  const validPackTypes = ["prompt-injection", "jailbreak", "red-team", "supply-chain", "robustness"];
+  if ("pack_type" in p && !validPackTypes.includes(String(p.pack_type))) {
+    messages.push(`Unknown pack_type: "${p.pack_type}". Expected one of: ${validPackTypes.join(", ")}`);
+  }
+
+  // Check each case
+  if (Array.isArray(p.cases)) {
+    const caseRequiredFields = ["case_id", "attack_family", "input_payloads"] as const;
+    for (let i = 0; i < p.cases.length; i++) {
+      const c = p.cases[i] as Record<string, unknown>;
+      for (const field of caseRequiredFields) {
+        if (!c || !(field in c) || c[field] === undefined || c[field] === null) {
+          messages.push(`Case ${i}: missing field "${field}"`);
+        }
+      }
+    }
+  }
+
+  // Check signature
+  const sig = p.signature as Record<string, unknown> | undefined;
+  if (sig && typeof sig === "object") {
+    if (sig.type === "sigstore" || sig.type === "sha256") {
+      verified = true;
+      signatureType = String(sig.type);
+    }
+  } else {
+    // No signature
+    if (options?.require_signed) {
+      valid = false;
+      messages.push("Pack is not signed but require_signed is true");
+    } else {
+      verified = false;
+      messages.push("Pack is unsigned");
+    }
+  }
+
+  const result: CorpusVerificationResult = {
+    valid,
+    verified,
+    messages
+  };
+
+  if (typeof p.pack_id === "string") result.pack_id = p.pack_id;
+  if (typeof p.pack_version === "string") result.pack_version = p.pack_version;
+  if (verified || signatureType !== null) {
+    result.signature_type = signatureType;
+  }
+
+  return result;
+}
+
 export async function loadConfig(path: string): Promise<EvalConfig> {
   const config = yaml.load(await readFile(path, "utf8")) as Partial<EvalConfig>;
   const defaults = defaultConfig();
@@ -1909,6 +2173,18 @@ export async function loadConfig(path: string): Promise<EvalConfig> {
       ...defaults.runtime,
       ...config.runtime
     },
+    security: config.security !== undefined
+      ? { ...defaults.security, ...config.security }
+      : defaults.security,
+    supply_chain: config.supply_chain !== undefined
+      ? { ...defaults.supply_chain, ...config.supply_chain }
+      : defaults.supply_chain,
+    telemetry: config.telemetry !== undefined
+      ? { ...defaults.telemetry, ...config.telemetry }
+      : defaults.telemetry,
+    hosted: config.hosted !== undefined
+      ? { ...defaults.hosted, ...config.hosted }
+      : defaults.hosted,
     outputs: {
       ...defaults.outputs,
       ...config.outputs
@@ -2017,7 +2293,7 @@ export async function evaluateProject(input: {
       ? 1
       : combinedScores.reduce((sum, value) => sum + value, 0) / combinedScores.length;
 
-  return {
+  const report: EvalReport = {
     summary: {
       score: clamp(average),
       badge: badgeForScore(average),
@@ -2035,6 +2311,48 @@ export async function evaluateProject(input: {
     static_results: staticResults,
     runtime_cases: runtimeResults
   };
+
+  // Supply chain audit
+  const supplyChainManifests = input.config.supply_chain?.manifests;
+  if (supplyChainManifests && supplyChainManifests.length > 0) {
+    report.audit = await evaluateSupplyChain(input.config, input.cwd);
+  }
+
+  // Corpus verification
+  const corpusPaths = input.config.security?.corpus_paths;
+  if (corpusPaths && corpusPaths.length > 0) {
+    const corpusResults: CorpusVerificationResult[] = [];
+    const requireSigned = input.config.security?.require_signed_corpus ?? false;
+    const allowUnsignedLocal = input.config.security?.allow_unsigned_local ?? true;
+    for (const corpusPath of corpusPaths) {
+      const absCorpusPath = resolve(input.cwd, corpusPath);
+      if (!existsSync(absCorpusPath)) continue;
+      let files: string[] = [];
+      try {
+        files = await fg(["**/*.yaml", "**/*.json"], { cwd: absCorpusPath, absolute: true });
+      } catch {
+        continue;
+      }
+      for (const filePath of files) {
+        let parsed: unknown;
+        try {
+          const raw = await readFile(filePath, "utf8");
+          parsed = filePath.endsWith(".json") ? JSON.parse(raw) : yaml.load(raw);
+        } catch {
+          continue;
+        }
+        const result = verifyCorpusPack(parsed, {
+          require_signed: requireSigned && !allowUnsignedLocal
+        });
+        corpusResults.push(result);
+      }
+    }
+    if (corpusResults.length > 0) {
+      report.corpus_verification = corpusResults;
+    }
+  }
+
+  return report;
 }
 
 export async function listMarkdownFiles(root: string): Promise<string[]> {
