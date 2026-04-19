@@ -9,7 +9,6 @@ npx subagent-evals@latest lint .
 ```
 
 Maintainer: **Praveen Yellamaraju**  
-Contact: `pyaichatbot@gmail.com`
 
 ## What it does
 

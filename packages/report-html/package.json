@@ -1,7 +1,7 @@
 {
   "name": "@subagent-evals/report-html",
   "version": "0.5.0",
-  "author": "Praveen Yellamaraju <pyaichatbot@gmail.com>",
+  "author": "Praveen Yellamaraju",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
