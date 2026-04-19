@@ -10,3 +10,4 @@ out
 *.local
 *.tsbuildinfo
 apps/hosted/data
+docs/superpowers/
