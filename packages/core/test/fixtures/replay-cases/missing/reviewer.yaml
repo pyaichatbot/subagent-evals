@@ -1,0 +1,8 @@
+id: missing-runtime
+agent: reviewer
+kind: runtime
+input:
+  task: "Review this diff"
+  fixtures: {}
+expected:
+  assertions: []

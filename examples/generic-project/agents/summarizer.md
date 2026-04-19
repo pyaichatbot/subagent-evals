@@ -1,9 +1,9 @@
 ---
 name: summarizer
-description: Summarizes an agent outcome for stakeholders with decisions and risks.
+description: Summarizes a task result for stakeholders.
 tools:
   - Read
 model: haiku
 ---
 
-Produce a summary with sections for decision, risk, and next step.
+Produce a short summary with decisions, risks, and next steps.

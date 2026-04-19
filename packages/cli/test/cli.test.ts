@@ -12,10 +12,22 @@ describe("cli", () => {
     await runCli(["init", "--cwd", dir]);
 
     const config = readFileSync(join(dir, "subagent-evals.config.yaml"), "utf8");
-    expect(config).toContain("format: claude-md");
+    expect(config).toContain("format: auto");
     expect(config).toContain("runner: command-runner");
-    expect(readFileSync(join(dir, "cases", "reviewer.yaml"), "utf8")).toContain(
+    expect(readFileSync(join(dir, "cases", "starter.yaml"), "utf8")).toContain(
       "kind: runtime"
+    );
+  });
+
+  it("accepts a positional target directory for init", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "subagent-evals-init-target-"));
+
+    await runCli(["init", dir, "--format", "codex-md"]);
+
+    const config = readFileSync(join(dir, "subagent-evals.config.yaml"), "utf8");
+    expect(config).toContain("format: codex-md");
+    expect(readFileSync(join(dir, "cases", "starter.yaml"), "utf8")).toContain(
+      "starter-runtime"
     );
   });
 });

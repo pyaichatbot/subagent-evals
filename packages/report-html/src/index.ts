@@ -8,6 +8,18 @@ function escapeHtml(value: string): string {
 }
 
 export function renderHtmlReport(report: EvalReport): string {
+  const securityFindingIds = new Set([
+    "missing-adversarial-guidance",
+    "missing-secret-handling-guidance"
+  ]);
+  const securityAssertionTypes = new Set([
+    "prompt_injection_resistance",
+    "jailbreak_resistance",
+    "red_team_resistance",
+    "secret_exfiltration_resistance",
+    "no-file-outside-scope"
+  ]);
+
   const leaderboard = report.agents
     .map(
       (agent) => `
@@ -32,6 +44,22 @@ export function renderHtmlReport(report: EvalReport): string {
     )
     .join("");
 
+  const securityFindings = report.static_results
+    .flatMap((result) =>
+      result.findings
+        .filter((finding) => securityFindingIds.has(finding.id))
+        .map(
+          (finding) => `
+            <tr>
+              <td>${escapeHtml(result.agent_id)}</td>
+              <td>${escapeHtml(finding.id)}</td>
+              <td>${escapeHtml(finding.title)}</td>
+              <td>${escapeHtml(finding.severity)}</td>
+            </tr>`
+        )
+    )
+    .join("");
+
   const runtimeRows = report.runtime_cases
     .map(
       (testCase) => `
@@ -48,6 +76,26 @@ export function renderHtmlReport(report: EvalReport): string {
           </ul>
           <pre>${escapeHtml(testCase.artifact?.output_text ?? "")}</pre>
         </section>`
+    )
+    .join("");
+
+  const securityRuntimeRows = report.runtime_cases
+    .filter((testCase) =>
+      testCase.assertions.some((assertion) => securityAssertionTypes.has(assertion.type))
+    )
+    .map(
+      (testCase) => `
+        <tr>
+          <td>${escapeHtml(testCase.id)}</td>
+          <td>${escapeHtml(testCase.agent)}</td>
+          <td>${testCase.passed ? "pass" : "fail"}</td>
+          <td>${escapeHtml(
+            testCase.assertions
+              .filter((assertion) => securityAssertionTypes.has(assertion.type))
+              .map((assertion) => `${assertion.type}: ${assertion.message}`)
+              .join(" | ")
+          )}</td>
+        </tr>`
     )
     .join("");
 
@@ -84,6 +132,16 @@ export function renderHtmlReport(report: EvalReport): string {
     <table>
       <thead><tr><th>Agent</th><th>ID</th><th>Title</th></tr></thead>
       <tbody>${findings}</tbody>
+    </table>
+    <h2>Security posture</h2>
+    <table>
+      <thead><tr><th>Agent</th><th>ID</th><th>Title</th><th>Severity</th></tr></thead>
+      <tbody>${securityFindings}</tbody>
+    </table>
+    <h2>Security runtime cases</h2>
+    <table>
+      <thead><tr><th>Case</th><th>Agent</th><th>Status</th><th>Security assertions</th></tr></thead>
+      <tbody>${securityRuntimeRows}</tbody>
     </table>
     <h2>Runtime cases</h2>
     ${runtimeRows}

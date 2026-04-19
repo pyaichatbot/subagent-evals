@@ -45,6 +45,12 @@ importers:
         specifier: 4.1.1
         version: 4.1.1
 
+  packages/hosted:
+    dependencies:
+      '@subagent-evals/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/report-html:
     dependencies:
       '@subagent-evals/core':

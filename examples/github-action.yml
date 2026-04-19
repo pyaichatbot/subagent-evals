@@ -10,13 +10,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: pyaichatbot/subagent-evals-action@v0
         with:
-          version: 10.32.1
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-      - run: node packages/cli/dist/bin/subagent-evals.js eval --cwd .
+          working-directory: .
+          config: subagent-evals.config.yaml
+          post-comment: true
+          baseline-mode: git-base

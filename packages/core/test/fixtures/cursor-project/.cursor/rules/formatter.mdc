@@ -1,0 +1,11 @@
+---
+name: formatter
+description: Formats TypeScript files to project style when user asks to clean or fix style.
+globs:
+  - "**/*.ts"
+tools:
+  - Read
+  - Edit
+---
+
+Format the file. Return formatted content only.

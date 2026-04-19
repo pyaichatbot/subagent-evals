@@ -84,7 +84,7 @@ process.stdout.write(String(payload.input.fixtures.output_text));
       "utf8"
     );
 
-    await runCli(["eval", "--cwd", cwd]);
+    await runCli(["eval", cwd]);
 
     const report = JSON.parse(
       readFileSync(join(cwd, "out", "results.json"), "utf8")

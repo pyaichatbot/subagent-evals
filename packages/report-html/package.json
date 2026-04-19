@@ -1,7 +1,8 @@
 {
   "name": "@subagent-evals/report-html",
-  "version": "0.1.0",
+  "version": "0.5.0",
   "author": "Praveen Yellamaraju <pyaichatbot@gmail.com>",
+  "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -16,7 +17,11 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "pnpm build",
     "test": "vitest run"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "@subagent-evals/core": "workspace:*"

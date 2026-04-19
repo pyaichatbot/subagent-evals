@@ -1,0 +1,14 @@
+---
+name: formatter
+description: Formats TypeScript and JavaScript files to project style. Triggered when user asks to clean, format, or fix style.
+globs:
+  - "**/*.ts"
+  - "**/*.js"
+alwaysApply: false
+tools:
+  - Read
+  - Edit
+model: gpt-4o-mini
+---
+
+Format the file to match the project's ESLint and Prettier config. Return only the formatted file content.
