@@ -718,6 +718,12 @@ export async function evaluateProject(input: {
           : undefined;
       if (fixtureOutput) {
         artifact = { output_text: fixtureOutput };
+        if (Array.isArray(testCase.input.fixtures.trace)) {
+          artifact.trace = testCase.input.fixtures.trace as TraceEvent[];
+        }
+        if (Array.isArray(testCase.input.fixtures.files_touched)) {
+          artifact.files_touched = testCase.input.fixtures.files_touched as string[];
+        }
       } else {
         artifact = await runCommandRunner({
           cwd: input.cwd,
