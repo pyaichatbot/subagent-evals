@@ -1917,15 +1917,17 @@ function levenshtein(a: string, b: string): number {
     Array.from({ length: n + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
   );
   for (let i = 1; i <= m; i++) {
+    const rowI = dp[i] as number[];
+    const rowIPrev = dp[i - 1] as number[];
     for (let j = 1; j <= n; j++) {
       if (a[i - 1] === b[j - 1]) {
-        dp[i][j] = dp[i - 1][j - 1];
+        rowI[j] = rowIPrev[j - 1] as number;
       } else {
-        dp[i][j] = 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+        rowI[j] = 1 + Math.min(rowIPrev[j] as number, rowI[j - 1] as number, rowIPrev[j - 1] as number);
       }
     }
   }
-  return dp[m][n];
+  return (dp[m] as number[])[n] as number;
 }
 
 function isSuspiciousPackageName(name: string, knownPackages: string[]): boolean {
@@ -1994,7 +1996,7 @@ export async function evaluateSupplyChain(config: EvalConfig, cwd: string): Prom
       const urlPattern = /resolved\s+"?(https?:\/\/[^\s"]+)"?/g;
       let match: RegExpExecArray | null;
       while ((match = urlPattern.exec(content)) !== null) {
-        const url = match[1];
+        const url = match[1] ?? "";
         if (
           !url.startsWith("https://registry.npmjs.org") &&
           !url.startsWith("https://registry.yarnpkg.com") &&
@@ -2026,7 +2028,7 @@ export async function evaluateSupplyChain(config: EvalConfig, cwd: string): Prom
         const simpleMatch = trimmed.match(/^([\w-]+)\s*=\s*"([^"]+)"/);
         if (simpleMatch) {
           const [, pkgName, versionSpec] = simpleMatch;
-          if (pkgName === "python") continue;
+          if (pkgName === "python" || !versionSpec) continue;
           if (!versionSpec.includes("==")) {
             findings.push({
               id: "unpinned-dependency",
@@ -2164,7 +2166,7 @@ export function verifyCorpusPack(
 export async function loadConfig(path: string): Promise<EvalConfig> {
   const config = yaml.load(await readFile(path, "utf8")) as Partial<EvalConfig>;
   const defaults = defaultConfig();
-  return {
+  const merged: EvalConfig = {
     discovery: {
       ...defaults.discovery,
       ...config.discovery
@@ -2173,18 +2175,6 @@ export async function loadConfig(path: string): Promise<EvalConfig> {
       ...defaults.runtime,
       ...config.runtime
     },
-    security: config.security !== undefined
-      ? { ...defaults.security, ...config.security }
-      : defaults.security,
-    supply_chain: config.supply_chain !== undefined
-      ? { ...defaults.supply_chain, ...config.supply_chain }
-      : defaults.supply_chain,
-    telemetry: config.telemetry !== undefined
-      ? { ...defaults.telemetry, ...config.telemetry }
-      : defaults.telemetry,
-    hosted: config.hosted !== undefined
-      ? { ...defaults.hosted, ...config.hosted }
-      : defaults.hosted,
     outputs: {
       ...defaults.outputs,
       ...config.outputs
@@ -2194,6 +2184,27 @@ export async function loadConfig(path: string): Promise<EvalConfig> {
       ...config.thresholds
     }
   };
+  if (config.security !== undefined) {
+    merged.security = { ...defaults.security, ...config.security };
+  } else if (defaults.security !== undefined) {
+    merged.security = defaults.security;
+  }
+  if (config.supply_chain !== undefined) {
+    merged.supply_chain = { ...defaults.supply_chain, ...config.supply_chain };
+  } else if (defaults.supply_chain !== undefined) {
+    merged.supply_chain = defaults.supply_chain;
+  }
+  if (config.telemetry !== undefined) {
+    merged.telemetry = { ...defaults.telemetry, ...config.telemetry };
+  } else if (defaults.telemetry !== undefined) {
+    merged.telemetry = defaults.telemetry;
+  }
+  if (config.hosted !== undefined) {
+    merged.hosted = { ...defaults.hosted, ...config.hosted };
+  } else if (defaults.hosted !== undefined) {
+    merged.hosted = defaults.hosted;
+  }
+  return merged;
 }
 
 export async function loadRuntimeCases(dir: string): Promise<RuntimeCase[]> {

@@ -12,11 +12,15 @@ import {
   defaultConfig,
   discoverAgents,
   evaluateProject,
+  evaluateSupplyChain,
   loadConfig,
   normalizeDiscoveredAgent,
   relativePath,
   renderPrComment,
-  type DiscoveryFormat
+  verifyCorpusPack,
+  type DiscoveryFormat,
+  type ModelDiffReport,
+  type ReplayBundle
 } from "@subagent-evals/core";
 import { renderHtmlReport } from "@subagent-evals/report-html";
 
@@ -173,10 +177,14 @@ export async function runCli(argv: string[]): Promise<void> {
     .argument("[target]", "directory to evaluate")
     .option("--cwd <cwd>", "working directory")
     .option("--config <config>", "config path", "subagent-evals.config.yaml")
+    .option("--shadow", "run in shadow (non-blocking) mode", false)
     .action(async (target, options) => {
       const cwd = resolveCommandCwd(target, options.cwd);
       const configPath = resolve(cwd, options.config);
       const config = await loadConfig(configPath);
+      if (options.shadow) {
+        config.runtime.shadow_eval = true;
+      }
       const report = await evaluateProject({ cwd, config });
       const outputJson = resolve(cwd, config.outputs?.json ?? "out/results.json");
       const outputJUnit = resolve(cwd, config.outputs?.junit ?? "out/results.junit.xml");
@@ -186,16 +194,20 @@ export async function runCli(argv: string[]): Promise<void> {
       await writeText(outputJUnit, createJUnitReport(report));
       await writeText(outputHtml, renderHtmlReport(report));
       await writeText(outputBadge, JSON.stringify(createBadgeJson(report), null, 2));
-      process.stdout.write(
-        `Evaluated ${report.summary.agents} agents (${relativePath(cwd, outputJson)})\n`
-      );
-      const failBelow = config.thresholds?.fail_below;
-      if (
-        report.runtime_cases.some((item) => !item.passed) ||
-        (typeof failBelow === "number" &&
-          report.static_results.some((result) => result.score < failBelow))
-      ) {
-        process.exitCode = 1;
+      if (options.shadow) {
+        process.stdout.write("[shadow] Eval complete (non-blocking)\n");
+      } else {
+        process.stdout.write(
+          `Evaluated ${report.summary.agents} agents (${relativePath(cwd, outputJson)})\n`
+        );
+        const failBelow = config.thresholds?.fail_below;
+        if (
+          report.runtime_cases.some((item) => !item.passed) ||
+          (typeof failBelow === "number" &&
+            report.static_results.some((result) => result.score < failBelow))
+        ) {
+          process.exitCode = 1;
+        }
       }
     });
 
@@ -297,6 +309,189 @@ export async function runCli(argv: string[]): Promise<void> {
       } else {
         process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
       }
+    });
+
+  // diff-model command
+  program
+    .command("diff-model")
+    .requiredOption("--config <config>", "config path", "subagent-evals.config.yaml")
+    .requiredOption("--compare-model <model>", "model to compare against")
+    .option("--compare-runner <runner>", "runner to use for comparison")
+    .option("--output <output>", "output path for diff report json")
+    .action(async (options) => {
+      const cwd = process.cwd();
+      const configPath = resolve(cwd, options.config);
+      const config = await loadConfig(configPath);
+      const currentReport = await evaluateProject({ cwd, config });
+      const compareConfig = {
+        ...config,
+        runtime: {
+          ...config.runtime,
+          model: options.compareModel,
+          ...(options.compareRunner ? { runner: options.compareRunner } : {})
+        }
+      };
+      const comparisonReport = await evaluateProject({ cwd, config: compareConfig });
+
+      const currentMap = new Map(currentReport.runtime_cases.map((item) => [item.id, item]));
+      const comparisonMap = new Map(comparisonReport.runtime_cases.map((item) => [item.id, item]));
+      const allIds = [...new Set([...currentMap.keys(), ...comparisonMap.keys()])].sort();
+
+      const runtimeCaseDeltas = allIds
+        .filter((id) => currentMap.has(id) && comparisonMap.has(id))
+        .map((id) => {
+          const cur = currentMap.get(id)!;
+          const cmp = comparisonMap.get(id)!;
+          return {
+            id,
+            current_score: cur.score,
+            comparison_score: cmp.score,
+            score_delta: Number((cmp.score - cur.score).toFixed(3)),
+            current_passed: cur.passed,
+            comparison_passed: cmp.passed
+          };
+        });
+
+      const parityCases = runtimeCaseDeltas.filter(
+        (item) => item.current_passed === item.comparison_passed
+      );
+      const parityScore =
+        runtimeCaseDeltas.length === 0 ? 1 : parityCases.length / runtimeCaseDeltas.length;
+
+      const diffReport: ModelDiffReport = {
+        current_label: config.runtime.model ?? "default",
+        comparison_label: options.compareModel,
+        current: currentReport,
+        comparison: comparisonReport,
+        score_delta: Number(
+          (comparisonReport.summary.score - currentReport.summary.score).toFixed(3)
+        ),
+        runtime_case_deltas: runtimeCaseDeltas,
+        parity_score: Number(parityScore.toFixed(3))
+      };
+
+      const json = JSON.stringify(diffReport, null, 2);
+      if (options.output) {
+        await writeText(resolve(options.output), json);
+      } else {
+        process.stdout.write(`${json}\n`);
+      }
+    });
+
+  // replay subcommands
+  const replayCmd = new Command("replay");
+
+  replayCmd
+    .addCommand(
+      new Command("export")
+        .requiredOption("--input <input>", "results json path")
+        .requiredOption("--output <output>", "output bundle directory")
+        .action(async (options) => {
+          const resultsPath = resolve(options.input);
+          const report = JSON.parse(await readFile(resultsPath, "utf8")) as {
+            replay_bundles?: ReplayBundle[];
+          };
+          if (!report.replay_bundles || report.replay_bundles.length === 0) {
+            process.stdout.write("No replay_bundles found in results file.\n");
+            return;
+          }
+          await ensureDir(resolve(options.output));
+          for (const bundle of report.replay_bundles) {
+            const outPath = join(resolve(options.output), `${bundle.bundle_id}.json`);
+            await writeFile(outPath, JSON.stringify(bundle, null, 2), "utf8");
+          }
+          process.stdout.write(
+            `Exported ${report.replay_bundles.length} replay bundle(s) to ${options.output}\n`
+          );
+        })
+    )
+    .addCommand(
+      new Command("import")
+        .requiredOption("--input <input>", "replay bundle json file")
+        .option("--snapshot-dir <dir>", "snapshot directory", ".subagent-evals/cache")
+        .action(async (options) => {
+          const bundlePath = resolve(options.input);
+          const bundle = JSON.parse(await readFile(bundlePath, "utf8")) as ReplayBundle;
+          const snapshotDir = resolve(options.snapshotDir);
+          const outPath = join(snapshotDir, `${bundle.cache_key}.json`);
+          await ensureDir(snapshotDir);
+          await writeFile(outPath, JSON.stringify(bundle, null, 2), "utf8");
+          process.stdout.write(`Imported replay bundle to ${outPath}\n`);
+        })
+    );
+
+  program.addCommand(replayCmd);
+
+  // corpus subcommands
+  const corpusCmd = new Command("corpus");
+
+  corpusCmd.addCommand(
+    new Command("verify")
+      .requiredOption("--input <input>", "corpus file path (YAML or JSON)")
+      .option("--require-signed", "require the corpus pack to be signed", false)
+      .action(async (options) => {
+        const filePath = resolve(options.input);
+        const raw = await readFile(filePath, "utf8");
+        const parsed = filePath.endsWith(".json") ? JSON.parse(raw) : yaml.load(raw);
+        const result = verifyCorpusPack(parsed, { require_signed: options.requireSigned });
+        process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+        if (!result.valid) {
+          process.exitCode = 1;
+        }
+      })
+  );
+
+  program.addCommand(corpusCmd);
+
+  // audit command
+  program
+    .command("audit")
+    .argument("[target]", "directory to audit")
+    .option("--config <config>", "config path", "subagent-evals.config.yaml")
+    .option("--output <output>", "output path for audit report json")
+    .action(async (target, options) => {
+      const cwd = resolve(target ?? process.cwd());
+      const configPath = resolve(cwd, options.config);
+      const config = await loadConfig(configPath);
+      const report = await evaluateSupplyChain(config, cwd);
+      const json = JSON.stringify(report, null, 2);
+      if (options.output) {
+        await writeText(resolve(options.output), json);
+      } else {
+        process.stdout.write(`${json}\n`);
+      }
+      if (report.score < 0.5) {
+        process.exitCode = 1;
+      }
+    });
+
+  // shadow flag on eval command
+  // Re-register eval with --shadow support by finding and replacing it above
+  // (already done by modifying the eval command below via addHelpText approach)
+  // Actually, the eval command was already registered above; we need to add --shadow there.
+  // Since we can't modify already-registered commands here, we handle it by
+  // having the eval command defined with --shadow from the start.
+  // Note: The eval command above needs --shadow. Let's add a shadow-eval alias command.
+  program
+    .command("shadow-eval")
+    .argument("[target]", "directory to evaluate in shadow mode")
+    .option("--cwd <cwd>", "working directory")
+    .option("--config <config>", "config path", "subagent-evals.config.yaml")
+    .action(async (target, options) => {
+      const cwd = resolveCommandCwd(target, options.cwd);
+      const configPath = resolve(cwd, options.config);
+      const config = await loadConfig(configPath);
+      config.runtime.shadow_eval = true;
+      const report = await evaluateProject({ cwd, config });
+      const outputJson = resolve(cwd, config.outputs?.json ?? "out/results.json");
+      const outputJUnit = resolve(cwd, config.outputs?.junit ?? "out/results.junit.xml");
+      const outputHtml = resolve(cwd, config.outputs?.html ?? "out/report.html");
+      const outputBadge = resolve(cwd, config.outputs?.badge ?? "out/badge.json");
+      await writeText(outputJson, JSON.stringify(report, null, 2));
+      await writeText(outputJUnit, createJUnitReport(report));
+      await writeText(outputHtml, renderHtmlReport(report));
+      await writeText(outputBadge, JSON.stringify(createBadgeJson(report), null, 2));
+      process.stdout.write("[shadow] Eval complete (non-blocking)\n");
     });
 
   await program.parseAsync(argv, { from: "user" });
