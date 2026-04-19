@@ -6,7 +6,11 @@ import { createHash } from "node:crypto";
 
 import {
   buildLeaderboard,
+  renderIndexPage,
+  renderLeaderboardPage,
   renderRepoPage,
+  renderRobotsTxt,
+  renderSitemap,
   validateSubmissionPayload
 } from "../../packages/hosted/dist/index.js";
 
@@ -106,6 +110,14 @@ async function persistSite() {
     await writeFile(jsonPath, JSON.stringify(item, null, 2), "utf8");
     await writeFile(htmlPath, renderRepoPage(item), "utf8");
   }
+  await writeFile(join(pagesDir, "index.html"), renderIndexPage(leaderboard), "utf8");
+  await writeFile(
+    join(pagesDir, "leaderboard.html"),
+    renderLeaderboardPage(leaderboard),
+    "utf8"
+  );
+  await writeFile(join(pagesDir, "robots.txt"), renderRobotsTxt(), "utf8");
+  await writeFile(join(pagesDir, "sitemap.xml"), renderSitemap(leaderboard), "utf8");
 }
 
 const server = createServer(async (req, res) => {
@@ -146,6 +158,54 @@ const server = createServer(async (req, res) => {
         sendText(res, 400, "invalid request");
       }
     }
+    return;
+  }
+
+  if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
+    const indexPath = join(pagesDir, "index.html");
+    sendText(
+      res,
+      200,
+      existsSync(indexPath)
+        ? await readFile(indexPath, "utf8")
+        : renderIndexPage([]),
+      "text/html; charset=utf-8"
+    );
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/leaderboard") {
+    const lbPath = join(pagesDir, "leaderboard.html");
+    sendText(
+      res,
+      200,
+      existsSync(lbPath)
+        ? await readFile(lbPath, "utf8")
+        : renderLeaderboardPage([]),
+      "text/html; charset=utf-8"
+    );
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/robots.txt") {
+    const robotsPath = join(pagesDir, "robots.txt");
+    sendText(
+      res,
+      200,
+      existsSync(robotsPath) ? await readFile(robotsPath, "utf8") : renderRobotsTxt(),
+      "text/plain; charset=utf-8"
+    );
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/sitemap.xml") {
+    const sitemapPath = join(pagesDir, "sitemap.xml");
+    sendText(
+      res,
+      200,
+      existsSync(sitemapPath) ? await readFile(sitemapPath, "utf8") : renderSitemap([]),
+      "application/xml; charset=utf-8"
+    );
     return;
   }
 

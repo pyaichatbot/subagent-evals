@@ -85,7 +85,7 @@ thresholds:
 - Baseline diff and PR comment artifact generation
 - Provider runners: `claude-code-runner`, `openai-runner`, `anthropic-runner`
 - Replay cache for deterministic CI runtime evals
-- Hosted package and local scaffold for repo pages, leaderboard, registry, and crawl ingestion
+- Hosted package and local scaffold for GitHub Pages repo pages, leaderboard, registry, and crawl ingestion
 
 ## Badge tiers
 
