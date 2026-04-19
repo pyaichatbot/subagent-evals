@@ -57,7 +57,18 @@ Each adapter normalizes agent files to the shared `NormalizedAgent` type. Same e
 | `windsurf-config` | `.windsurf/rules/*.md` | Windsurf |
 | `generic-frontmatter` | Any YAML-frontmatter `.md` glob | Generic |
 
-`auto` discovery mode: scan repo root, detect which formats exist, run all matching adapters with zero config.
+**`auto` discovery — explicit policy for mixed and monorepos:**
+
+`auto` runs all matching adapters and applies these rules in order:
+
+1. **Stable agent ID**: each discovered agent gets an ID of `{adapter}:{relative-path}#{section}`. IDs are stable across runs regardless of discovery order.
+2. **No deduplication by default**: if the same logical agent appears in two formats (e.g., during a tool migration), both are reported as separate agents under their respective adapter IDs. The report groups by adapter so scores are never merged silently.
+3. **Explicit dedup config**: repos that want to suppress duplicates declare `discovery.dedup: true` and provide a `discovery.primary` adapter (e.g., `claude-md`). Secondary adapters are still discovered but skipped in scoring if the primary also matched the same path stem.
+4. **Monorepo roots**: `discovery.roots` accepts multiple paths (`[packages/agent-a, packages/agent-b]`). Each root is discovered independently; results are namespaced by root in the report.
+5. **Section-based formats**: Copilot and Codex formats that define multiple agents in one file use heading-level extraction. Each `## Agent: <name>` heading becomes one `NormalizedAgent` with ID `{adapter}:{file}#{normalized-heading}`.
+6. **Ambiguity warning**: if `auto` discovers agents from 3+ adapters and no `discovery.dedup` is set, it emits a warning recommending explicit config.
+
+This makes "zero-config" predictable: it always runs everything, always labels by adapter, never silently merges.
 
 ### Runner Adapters (execute layer)
 
@@ -135,7 +146,11 @@ Features:
   - Weak assertion detection: flags `contains: "a"` or single-char assertions
   - Replay-only overfitting: warns if all runtime cases use fixture runner with no live cases
   - Shallow fixture gaming: detects fixtures that trivially satisfy all assertions without meaningful output
-- **Python wrapper SDK**: `pip install subagent-evals` bundles the CLI binary (via `pyproject.toml` `[project.scripts]`), shells out for eval, surfaces results as `EvalResult` dataclass; includes pytest plugin exposing `assert_agent_score()` fixture
+- **Python wrapper SDK**: `pip install subagent-evals` — implementation strategy for v0.5:
+  - **Runtime dependency on Node**: the Python package declares `node >= 18` as a system requirement (checked at import time with a clear error). It shells out to `npx subagent-evals@{version}` pinned to the same version as the Python package. This is the simplest cross-platform story and avoids binary bundling entirely.
+  - **What the wrapper provides**: `EvalResult` dataclass (parsed from `--output json`), `lint(path)` / `eval(path)` / `report(path)` convenience functions, and a pytest plugin with an `assert_agent_score(min=0.75)` fixture.
+  - **What it does not try to do**: bundle a Node binary, vendor compiled JS, or work without Node installed. A future v1.x release may add platform wheels with bundled Node via `nuitka` or `pyinstaller`, but that is explicitly deferred.
+  - **Why this is safe for v0.5**: the target Python user is a developer already running Node for their AI tool (Claude Code, Codex). Node presence can be assumed. The "no Node" case gets a clear install error, not a silent failure.
 
 Definition of done: A new repo can add the GitHub Action, get a PR comment with scores, and put a badge in their README in under 5 minutes.
 
@@ -144,11 +159,10 @@ Definition of done: A new repo can add the GitHub Action, get a PR comment with 
 **Goal:** Own the category with the leaderboard and semantic evals.
 
 Features:
-- **Public leaderboard** at `subagent-evals.dev`:
-  - `subagent-evals submit` sends anonymized results (opt-in, explicit consent)
-  - Rankings: overall, per-tool (best Claude agents, best Codex agents, etc.)
-  - "Top agent repos this week" — shareable, embeddable
-  - Public agent profiles: `subagent-evals.dev/r/{owner}/{repo}`
+- **Public leaderboard** at `subagent-evals.dev` — two explicit submission modes:
+  - **Anonymous mode** (default): `subagent-evals submit` sends only scores, badge tier, agent count, and adapter type. No repo name, no org, no file paths. Feeds aggregate stats ("X% of Claude repos are certified") but does not appear as a named entry.
+  - **Attributed mode** (opt-in, requires `--public` flag + GitHub token): submits the same payload plus `{owner}/{repo}` and links the entry to a public GitHub repo. This creates `subagent-evals.dev/r/{owner}/{repo}`. CLI requires explicit `--public` confirmation; GitHub Action requires `public: true` input. The two modes never mix data: anonymous submissions are never retroactively attributed.
+  - Rankings ("Top agent repos this week") only include attributed entries. Anonymous submissions only appear in aggregate leaderboard stats.
 - **LLM-as-judge semantic scoring**:
   - `judge_score` assertion type (was reserved, now implemented)
   - Trajectory critique: "Did the agent use the right tools in the right order?"
@@ -239,11 +253,26 @@ This is a shareable insight, not just another lint tool announcement. It address
 - `action/` (GitHub Action entrypoint)
 
 ### Modified files
-- `packages/core/src/discovery.ts` — add `auto` format detection
-- `packages/core/src/types.ts` — extend `AgentFormatId`, add integrity types
-- `packages/cli/src/bin.ts` — add `submit`, `badge` commands
-- `packages/core/src/config.ts` — extend config schema
+
+> Note: the current codebase has not yet been split into separate modules. All core logic lives in `packages/core/src/index.ts` and all CLI logic lives in `packages/cli/src/index.ts`. The implementation plan will need to either extract modules from these files or add new functions to them. The paths below describe the intended post-refactor structure; the implementation plan decides whether to refactor first or extend in-place.
+
+- `packages/core/src/index.ts` — extend `AgentFormatId` union, add `auto` discovery, add integrity eval exports, add `NormalizedAgent` section-ID support
+- `packages/cli/src/index.ts` — add `submit`, `badge`, `report` (with badge flag) commands
 - `README.md` — complete rewrite for new positioning
+
+---
+
+## Edge Cases and Explicit Policies
+
+| Scenario | Behaviour |
+|---|---|
+| Mixed-format repo (Claude + Cursor both present) | `auto` discovers both; reports under separate adapter IDs; warns if 3+ adapters and no explicit config |
+| Private repo that wants local badges, never public | `subagent-evals report --badge` always works locally; `submit` requires `--public` flag to touch the network; badge endpoint can be self-hosted |
+| Monorepo with multiple agent packs | `discovery.roots: [packages/agent-a, packages/agent-b]` — each root is namespaced in report output |
+| Repo with only replay cases, no live runner credentials | Fully supported; `replay-runner` is the default. The report notes "runtime: fixture-only" and integrity checks flag if no live cases exist (warning, not error) |
+| Tool format that defines multiple agents in one file | Section-based extraction: `## Agent: <name>` headings split the file into one `NormalizedAgent` per heading; ID is `{adapter}:{file}#{normalized-heading}` |
+| Agent appears in two formats during migration | Both discovered; neither deduplicated unless `discovery.dedup: true` is set; report groups by adapter |
+| Score delta on first PR (no base branch result) | GitHub Action treats missing base score as "no prior baseline"; shows absolute score only, no delta |
 
 ---
 
