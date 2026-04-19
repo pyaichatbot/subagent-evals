@@ -144,6 +144,8 @@ Missing `model_spec` currently scores `0.6`, missing `adversarial_resilience` sc
 - `examples/copilot-project` — Copilot instructions
 - `examples/cursor-project` — Cursor rules
 - `examples/windsurf-project` — Windsurf rules
+- `examples/prompt-injection-project` — injection-resistant Claude-style reviewer
+- `examples/red-team-project` — red-team and secret-exfiltration-resistant Claude-style reviewer
 - `examples/bad-project` — what `experimental` looks like
 
 ## License
