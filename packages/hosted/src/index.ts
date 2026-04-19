@@ -19,7 +19,7 @@ export interface HostedRenderOptions {
 const DEFAULT_BASE_URL = "https://pyaichatbot.github.io/subagent-evals";
 const DEFAULT_SITE_NAME = "subagent-evals";
 const DEFAULT_TAGLINE = "The Codecov for markdown AI agents.";
-const DEFAULT_REPO_URL = "https://github.com/ypraveen/subagent-evals";
+const DEFAULT_REPO_URL = "https://github.com/pyaichatbot/subagent-evals";
 
 export function validateSubmissionPayload(payload: unknown): payload is SubmissionPayload {
   if (!payload || typeof payload !== "object") {
@@ -95,6 +95,13 @@ function resolveOptions(options?: HostedRenderOptions) {
     repoUrl: options?.repoUrl ?? DEFAULT_REPO_URL,
     generatedAt: options?.generatedAt ?? new Date().toISOString()
   };
+}
+
+function sitePath(options: ReturnType<typeof resolveOptions>, path: string): string {
+  const base = new URL(options.baseUrl);
+  const prefix = base.pathname.replace(/\/$/, "");
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  return `${prefix}${normalized}`;
 }
 
 function tierColor(tier: BadgeTier): string {
@@ -262,13 +269,13 @@ function renderHeader(options: ReturnType<typeof resolveOptions>, active?: strin
   return `<a class="skip-link" href="#main">Skip to main content</a>
 <header class="site-header" role="banner">
   <div class="container site-header__inner">
-    <a class="brand" href="/" aria-label="${escapeAttr(options.siteName)} home">
+    <a class="brand" href="${sitePath(options, "/")}" aria-label="${escapeAttr(options.siteName)} home">
       <span class="brand__mark" aria-hidden="true"></span>
       <span>${escapeHtml(options.siteName)}</span>
       <span class="brand__tag" aria-hidden="true">evals</span>
     </a>
     <nav class="nav" aria-label="Primary">
-      <a href="/leaderboard"${isLeaderboard ? ' aria-current="page"' : ""}>Leaderboard</a>
+      <a href="${sitePath(options, "/leaderboard")}"${isLeaderboard ? ' aria-current="page"' : ""}>Leaderboard</a>
       <a href="${escapeAttr(options.repoUrl)}/tree/main/docs"${isDocs ? ' aria-current="page"' : ""} rel="noopener">Docs</a>
       <a href="${escapeAttr(options.repoUrl)}" rel="noopener">GitHub</a>
     </nav>
@@ -286,9 +293,9 @@ function renderFooter(options: ReturnType<typeof resolveOptions>): string {
     </div>
     <div>
       <a href="${escapeAttr(options.repoUrl)}" rel="noopener">GitHub</a> &nbsp;·&nbsp;
-      <a href="/leaderboard">Leaderboard</a> &nbsp;·&nbsp;
-      <a href="/registry.json">Registry JSON</a> &nbsp;·&nbsp;
-      <a href="/sitemap.xml">Sitemap</a>
+      <a href="${sitePath(options, "/leaderboard")}">Leaderboard</a> &nbsp;·&nbsp;
+      <a href="${sitePath(options, "/registry.json")}">Registry JSON</a> &nbsp;·&nbsp;
+      <a href="${sitePath(options, "/sitemap.xml")}">Sitemap</a>
     </div>
     <div>
       © ${year} ${escapeHtml(options.siteName)} · MIT License
@@ -407,8 +414,8 @@ export function renderRepoPage(entry: SubmissionPayload, options?: HostedRenderO
   const content = `
       <nav aria-label="Breadcrumb">
         <ol class="breadcrumb">
-          <li><a href="/">Home</a></li>
-          <li><a href="/leaderboard">Leaderboard</a></li>
+          <li><a href="${sitePath(opts, "/")}">Home</a></li>
+          <li><a href="${sitePath(opts, "/leaderboard")}">Leaderboard</a></li>
           <li>${escapeHtml(title)}</li>
         </ol>
       </nav>
@@ -521,9 +528,12 @@ export function renderLeaderboardPage(
         <tr>
           <td class="rank">${String(index + 1).padStart(2, "0")}</td>
           <td class="repo">
-            <a href="/r/${encodeURIComponent(entry.attribution?.owner ?? "")}/${encodeURIComponent(
-              entry.attribution?.repo ?? ""
-            )}.html">${escapeHtml(entry.id)}</a>
+            <a href="${sitePath(
+              opts,
+              `/r/${encodeURIComponent(entry.attribution?.owner ?? "")}/${encodeURIComponent(
+                entry.attribution?.repo ?? ""
+              )}.html`
+            )}">${escapeHtml(entry.id)}</a>
           </td>
           <td>${tierPill(entry.summary.badge)}</td>
           <td>${renderAdapters(entry.adapters)}</td>
@@ -555,7 +565,7 @@ export function renderLeaderboardPage(
   const content = `
       <nav aria-label="Breadcrumb">
         <ol class="breadcrumb">
-          <li><a href="/">Home</a></li>
+          <li><a href="${sitePath(opts, "/")}">Home</a></li>
           <li>Leaderboard</li>
         </ol>
       </nav>
@@ -565,7 +575,7 @@ export function renderLeaderboardPage(
       ${body}
       <p style="color:var(--muted);font-size:.85rem;margin-top:2rem">
         Data generated ${escapeHtml(opts.generatedAt)}.
-        <a href="/leaderboard.json">View as JSON</a>.
+        <a href="${sitePath(opts, "/leaderboard.json")}">View as JSON</a>.
       </p>
   `;
 
@@ -629,11 +639,12 @@ export function renderIndexPage(
             (entry, index) => `
           <tr>
             <td class="rank">${String(index + 1).padStart(2, "0")}</td>
-            <td class="repo"><a href="/r/${encodeURIComponent(
-              entry.attribution?.owner ?? ""
-            )}/${encodeURIComponent(
-              entry.attribution?.repo ?? ""
-            )}.html">${escapeHtml(entry.id)}</a></td>
+            <td class="repo"><a href="${sitePath(
+              opts,
+              `/r/${encodeURIComponent(entry.attribution?.owner ?? "")}/${encodeURIComponent(
+                entry.attribution?.repo ?? ""
+              )}.html`
+            )}">${escapeHtml(entry.id)}</a></td>
             <td>${tierPill(entry.summary.badge)}</td>
             <td class="score" style="color:${tierColor(
               entry.summary.badge
@@ -653,7 +664,7 @@ export function renderIndexPage(
       <p class="lede">Lint, eval, score, and ship markdown-defined agents for Claude Code, Codex, GitHub Copilot, Cursor, and Windsurf. Zero config. Deterministic replay. Public leaderboard.</p>
       <div class="actions">
         <a class="btn" href="${escapeAttr(opts.repoUrl)}" rel="noopener">Star on GitHub</a>
-        <a class="btn btn--ghost" href="/leaderboard">View leaderboard</a>
+        <a class="btn btn--ghost" href="${sitePath(opts, "/leaderboard")}">View leaderboard</a>
         <a class="btn btn--ghost" href="${escapeAttr(opts.repoUrl)}#quickstart" rel="noopener">Quickstart</a>
       </div>
 
@@ -686,7 +697,7 @@ npx subagent-evals@latest submit --public --owner you --repo your-repo</pre>
       <h2 class="display">Top public repositories</h2>
       <p style="color:var(--muted);margin:0 0 1rem">Ranked by overall score. Updated on every submission.</p>
       ${topList}
-      ${normalized.length > 5 ? `<p style="margin-top:1rem"><a href="/leaderboard">See the full leaderboard →</a></p>` : ""}
+      ${normalized.length > 5 ? `<p style="margin-top:1rem"><a href="${sitePath(opts, "/leaderboard")}">See the full leaderboard →</a></p>` : ""}
 
       <hr class="rule" />
       <h2 class="display">Supported formats</h2>
