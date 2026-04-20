@@ -11,3 +11,4 @@ out
 *.tsbuildinfo
 apps/hosted/data
 docs/superpowers/
+.video-temp/
