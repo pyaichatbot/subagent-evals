@@ -2359,7 +2359,194 @@ export async function evaluateProject(input: {
     }
   }
 
+  // Shadow eval: time-series snapshot + baseline diff
+  if (input.config.runtime.shadow_eval) {
+    const timeSeriesDir = resolve(input.cwd, ".subagent-evals/time-series");
+    const currentSnapshot: TimeSeriesSnapshot = {
+      schema_version: 1,
+      created_at: new Date().toISOString(),
+      summary: report.summary,
+      agents: report.agents
+    };
+    await saveTimeSeriesSnapshot(currentSnapshot, timeSeriesDir);
+
+    const baselinePath = resolve(input.cwd, ".subagent-evals/shadow-baseline.json");
+    if (existsSync(baselinePath)) {
+      try {
+        const baselineReport = JSON.parse(await readFile(baselinePath, "utf8")) as EvalReport;
+        diffEvalReports(report, baselineReport);
+        const baselineSnapshot: TimeSeriesSnapshot = {
+          schema_version: 1,
+          created_at: baselineReport.time_series?.[0]?.created_at ?? new Date(0).toISOString(),
+          summary: baselineReport.summary,
+          agents: baselineReport.agents
+        };
+        report.time_series = [baselineSnapshot, currentSnapshot];
+      } catch {
+        report.time_series = [currentSnapshot];
+      }
+    } else {
+      report.time_series = [currentSnapshot];
+    }
+  }
+
   return report;
+}
+
+export interface DriftReport {
+  has_drift: boolean;
+  score_delta: number;
+  badge_changed: boolean;
+  agent_regressions: Array<{ agent_id: string; score_delta: number; badge_before: BadgeTier; badge_after: BadgeTier }>;
+}
+
+export async function evaluateParity(input: {
+  cwd: string;
+  config: EvalConfig;
+  runtimeCases: RuntimeCase[];
+  currentReport: EvalReport;
+}): Promise<{ parity_score: number; case_deltas: Array<{ id: string; current_passed: boolean; targets: Array<{ label: string; passed: boolean; score: number }> }> }> {
+  const diffTargets = input.config.runtime.diff_targets ?? [];
+  if (diffTargets.length === 0) {
+    return { parity_score: 1, case_deltas: [] };
+  }
+
+  // Run each diff_target config through evaluateProject
+  const targetReports: Array<{ label: string; report: EvalReport }> = [];
+  for (const target of diffTargets) {
+    const targetConfig: EvalConfig = {
+      ...input.config,
+      runtime: {
+        ...input.config.runtime,
+        ...(target.runner !== undefined ? { runner: target.runner } : {}),
+        ...(target.model !== undefined ? { model: target.model } : {}),
+        ...(target.base_url !== undefined ? { base_url: target.base_url } : {}),
+        ...(target.api_env_var !== undefined ? { api_env_var: target.api_env_var } : {})
+      }
+    };
+    const report = await evaluateProject({ cwd: input.cwd, config: targetConfig });
+    targetReports.push({ label: target.label, report });
+  }
+
+  // Build case_deltas
+  const currentCaseMap = new Map(input.currentReport.runtime_cases.map((item) => [item.id, item]));
+  const allCaseIds = [...new Set([
+    ...input.currentReport.runtime_cases.map((item) => item.id),
+    ...targetReports.flatMap(({ report }) => report.runtime_cases.map((item) => item.id))
+  ])];
+
+  let allAgreeCount = 0;
+  const caseDeltasResult: Array<{ id: string; current_passed: boolean; targets: Array<{ label: string; passed: boolean; score: number }> }> = [];
+
+  for (const id of allCaseIds) {
+    const currentCase = currentCaseMap.get(id);
+    const currentPassed = currentCase?.passed ?? false;
+
+    const targetResults = targetReports.map(({ label, report }) => {
+      const targetCase = report.runtime_cases.find((item) => item.id === id);
+      return {
+        label,
+        passed: targetCase?.passed ?? false,
+        score: targetCase?.score ?? 0
+      };
+    });
+
+    caseDeltasResult.push({
+      id,
+      current_passed: currentPassed,
+      targets: targetResults
+    });
+
+    // Check if all targets agree with current on pass/fail
+    const allAgree = targetResults.every((t) => t.passed === currentPassed);
+    if (allAgree) {
+      allAgreeCount++;
+    }
+  }
+
+  const parityScore = allCaseIds.length === 0 ? 1 : allAgreeCount / allCaseIds.length;
+
+  return {
+    parity_score: Number(parityScore.toFixed(3)),
+    case_deltas: caseDeltasResult
+  };
+}
+
+export async function saveTimeSeriesSnapshot(snapshot: TimeSeriesSnapshot, dir: string): Promise<string> {
+  await mkdir(dir, { recursive: true });
+  const safeTimestamp = snapshot.created_at.replaceAll(":", "-");
+  const filePath = join(dir, `${safeTimestamp}.json`);
+  await writeFile(filePath, JSON.stringify(snapshot, null, 2), "utf8");
+  return filePath;
+}
+
+export async function loadTimeSeriesSnapshots(dir: string): Promise<TimeSeriesSnapshot[]> {
+  if (!existsSync(dir)) {
+    return [];
+  }
+  let files: string[];
+  try {
+    const entries = await readdir(dir);
+    files = entries.filter((name) => name.endsWith(".json")).map((name) => join(dir, name));
+  } catch {
+    return [];
+  }
+  const snapshots: TimeSeriesSnapshot[] = [];
+  for (const filePath of files) {
+    try {
+      const content = await readFile(filePath, "utf8");
+      snapshots.push(JSON.parse(content) as TimeSeriesSnapshot);
+    } catch {
+      // skip invalid files
+    }
+  }
+  return snapshots.sort((a, b) => a.created_at.localeCompare(b.created_at));
+}
+
+export function detectDrift(snapshots: TimeSeriesSnapshot[]): DriftReport {
+  if (snapshots.length < 2) {
+    return { has_drift: false, score_delta: 0, badge_changed: false, agent_regressions: [] };
+  }
+
+  const previous = snapshots[snapshots.length - 2]!;
+  const latest = snapshots[snapshots.length - 1]!;
+
+  const scoreDelta = round3(latest.summary.score - previous.summary.score);
+  const badgeChanged = latest.summary.badge !== previous.summary.badge;
+
+  const previousAgentMap = new Map((previous.agents ?? []).map((a) => [a.agent_id, a]));
+  const agentRegressions: DriftReport["agent_regressions"] = [];
+
+  for (const agent of latest.agents ?? []) {
+    const prevAgent = previousAgentMap.get(agent.agent_id);
+    if (!prevAgent) continue;
+    const delta = round3(agent.score - prevAgent.score);
+    const badgeWorsened = badgeRank(agent.badge) < badgeRank(prevAgent.badge);
+    if (delta < -0.05 || badgeWorsened) {
+      agentRegressions.push({
+        agent_id: agent.agent_id,
+        score_delta: delta,
+        badge_before: prevAgent.badge,
+        badge_after: agent.badge
+      });
+    }
+  }
+
+  return {
+    has_drift: badgeChanged || agentRegressions.length > 0,
+    score_delta: scoreDelta,
+    badge_changed: badgeChanged,
+    agent_regressions: agentRegressions
+  };
+}
+
+function badgeRank(badge: BadgeTier): number {
+  switch (badge) {
+    case "certified": return 3;
+    case "strong": return 2;
+    case "usable": return 1;
+    default: return 0;
+  }
 }
 
 export async function listMarkdownFiles(root: string): Promise<string[]> {

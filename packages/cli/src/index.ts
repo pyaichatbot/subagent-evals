@@ -7,13 +7,17 @@ import yaml from "js-yaml";
 import {
   createBadgeJson,
   createSubmissionPayload,
+  detectDrift,
   diffEvalReports,
   createJUnitReport,
   defaultConfig,
   discoverAgents,
+  evaluateParity,
   evaluateProject,
   evaluateSupplyChain,
   loadConfig,
+  loadRuntimeCases,
+  loadTimeSeriesSnapshots,
   normalizeDiscoveredAgent,
   relativePath,
   renderPrComment,
@@ -442,6 +446,64 @@ export async function runCli(argv: string[]): Promise<void> {
   );
 
   program.addCommand(corpusCmd);
+
+  // parity command
+  program
+    .command("parity")
+    .argument("[target]", "directory to evaluate")
+    .option("--config <config>", "config path", "subagent-evals.config.yaml")
+    .option("--output <output>", "output path for parity report json")
+    .action(async (target, options) => {
+      const cwd = resolveCommandCwd(target, undefined);
+      const configPath = resolve(cwd, options.config);
+      const config = await loadConfig(configPath);
+      const casesDir = resolve(cwd, "cases");
+      const runtimeCases = await loadRuntimeCases(casesDir);
+      const currentReport = await evaluateProject({ cwd, config });
+      const result = await evaluateParity({ cwd, config, runtimeCases, currentReport });
+      const json = JSON.stringify(result, null, 2);
+      if (options.output) {
+        await writeText(resolve(options.output), json);
+      } else {
+        process.stdout.write(`${json}\n`);
+      }
+      process.stdout.write(`Parity score: ${result.parity_score.toFixed(3)}\n`);
+    });
+
+  // time-series subcommands
+  const timeSeriesCmd = new Command("time-series");
+
+  timeSeriesCmd.addCommand(
+    new Command("list")
+      .argument("[target]", "directory (unused, for symmetry)")
+      .option("--dir <dir>", "snapshots directory", ".subagent-evals/time-series")
+      .action(async (_target, options) => {
+        const snapshotsDir = resolve(options.dir);
+        const snapshots = await loadTimeSeriesSnapshots(snapshotsDir);
+        for (const snap of snapshots) {
+          process.stdout.write(
+            `${snap.created_at}  score=${snap.summary.score}  badge=${snap.summary.badge}  agents=${(snap.agents ?? []).length}\n`
+          );
+        }
+      })
+  );
+
+  timeSeriesCmd.addCommand(
+    new Command("diff")
+      .argument("[target]", "directory (unused, for symmetry)")
+      .option("--dir <dir>", "snapshots directory", ".subagent-evals/time-series")
+      .action(async (_target, options) => {
+        const snapshotsDir = resolve(options.dir);
+        const snapshots = await loadTimeSeriesSnapshots(snapshotsDir);
+        const driftReport = detectDrift(snapshots);
+        process.stdout.write(`${JSON.stringify(driftReport, null, 2)}\n`);
+        if (driftReport.has_drift) {
+          process.exitCode = 1;
+        }
+      })
+  );
+
+  program.addCommand(timeSeriesCmd);
 
   // audit command
   program
