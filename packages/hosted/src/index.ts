@@ -848,11 +848,7 @@ export function buildGitHubStatusPayload(
 ): GitHubStatusPayload {
   const badge = payload.summary.badge;
   const state: GitHubStatusPayload["state"] =
-    badge === "certified" || badge === "strong"
-      ? "success"
-      : badge === "experimental"
-        ? "failure"
-        : "pending";
+    badge === "experimental" ? "failure" : "success";
 
   const description = `subagent-evals: ${badge} (score=${payload.summary.score.toFixed(3)}, agents=${payload.summary.agents})`;
 
@@ -967,7 +963,7 @@ export interface BadgeAttestation {
 
 export function buildBadgeAttestation(
   entry: HostedRepoEntry,
-  merkleRoot?: string
+  options?: { merkle_root?: string; corpus_pack_id?: string; replay_bundle_id?: string }
 ): BadgeAttestation {
   const repo_id =
     entry.attribution
@@ -984,7 +980,9 @@ export function buildBadgeAttestation(
     badge: entry.summary.badge,
     score: entry.summary.score,
     attested_at: new Date().toISOString(),
-    ...(merkleRoot !== undefined ? { merkle_root: merkleRoot } : {}),
+    ...(options?.merkle_root !== undefined ? { merkle_root: options.merkle_root } : {}),
+    ...(options?.corpus_pack_id !== undefined ? { corpus_pack_id: options.corpus_pack_id } : {}),
+    ...(options?.replay_bundle_id !== undefined ? { replay_bundle_id: options.replay_bundle_id } : {}),
     payload_hash
   };
 }
