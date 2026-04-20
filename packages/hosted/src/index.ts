@@ -805,3 +805,201 @@ export function buildMerkleSnapshot(
   const root = buildMerkleRoot(leaves.map((l) => l.leaf_hash));
   return { root, generated_at: generatedAt, leaves };
 }
+
+// ---------------------------------------------------------------------------
+// HostedSubmissionPayload – extends SubmissionPayload with hosted trust info
+// ---------------------------------------------------------------------------
+
+export type HostedAttestationStatus = "verified" | "pending" | "failed" | "none";
+
+export interface HostedSubmissionPayload extends SubmissionPayload {
+  trust?: {
+    attestation?: {
+      status: HostedAttestationStatus;
+    };
+    replay_bundle?: {
+      bundle_id: string;
+    };
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 1. buildGitHubStatusPayload
+// ---------------------------------------------------------------------------
+
+export interface GitHubStatusPayload {
+  state: "success" | "failure" | "pending";
+  description: string;
+  context: string;
+  target_url?: string;
+  details: {
+    score: number;
+    badge: BadgeTier;
+    agents: number;
+    corpus_verified: boolean;
+    replay_bundle_id?: string;
+    attestation_status?: HostedAttestationStatus;
+  };
+}
+
+export function buildGitHubStatusPayload(
+  payload: HostedSubmissionPayload,
+  options?: { base_url?: string; context?: string }
+): GitHubStatusPayload {
+  const badge = payload.summary.badge;
+  const state: GitHubStatusPayload["state"] =
+    badge === "certified" || badge === "strong"
+      ? "success"
+      : badge === "experimental"
+        ? "failure"
+        : "pending";
+
+  const description = `subagent-evals: ${badge} (score=${payload.summary.score.toFixed(3)}, agents=${payload.summary.agents})`;
+
+  const context = options?.context ?? "subagent-evals";
+
+  let target_url: string | undefined;
+  if (options?.base_url && payload.attribution) {
+    const base = options.base_url.replace(/\/$/, "");
+    target_url = `${base}/repos/${payload.attribution.owner}/${payload.attribution.repo}`;
+  }
+
+  const corpus_verified = payload.trust?.attestation?.status === "verified";
+  const replay_bundle_id = payload.trust?.replay_bundle?.bundle_id;
+  const attestation_status = payload.trust?.attestation?.status;
+
+  return {
+    state,
+    description,
+    context,
+    ...(target_url !== undefined ? { target_url } : {}),
+    details: {
+      score: payload.summary.score,
+      badge,
+      agents: payload.summary.agents,
+      corpus_verified,
+      ...(replay_bundle_id !== undefined ? { replay_bundle_id } : {}),
+      ...(attestation_status !== undefined ? { attestation_status } : {})
+    }
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 2. Corpus Registry
+// ---------------------------------------------------------------------------
+
+export interface CorpusRegistryEntry {
+  pack_id: string;
+  pack_version: string;
+  pack_type: string;
+  publisher: string;
+  description?: string;
+  download_url?: string;
+  signature_type?: "sigstore" | "sha256";
+  verified: boolean;
+  created_at: string;
+}
+
+export interface CorpusRegistry {
+  schema_version: 1;
+  generated_at: string;
+  entries: CorpusRegistryEntry[];
+}
+
+export function buildRegistry(entries: CorpusRegistryEntry[]): CorpusRegistry {
+  return {
+    schema_version: 1,
+    generated_at: new Date().toISOString(),
+    entries
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 3. Third-party Reviewer Certification
+// ---------------------------------------------------------------------------
+
+export interface CertificationRequest {
+  schema_version: 1;
+  repo_id: string;
+  reviewer_id: string;
+  corpus_pack_id?: string;
+  replay_bundle_id?: string;
+  submitted_at: string;
+  notes?: string;
+}
+
+export interface CertificationRecord extends CertificationRequest {
+  certification_id: string;
+  status: "pending" | "approved" | "rejected";
+  approved_by?: string[];
+  decided_at?: string;
+}
+
+export function createCertificationRequest(input: {
+  repo_id: string;
+  reviewer_id: string;
+  corpus_pack_id?: string;
+  replay_bundle_id?: string;
+  notes?: string;
+}): CertificationRequest {
+  return {
+    schema_version: 1,
+    ...input,
+    submitted_at: new Date().toISOString()
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 4. Badge Attestation
+// ---------------------------------------------------------------------------
+
+export interface BadgeAttestation {
+  schema_version: 1;
+  repo_id: string;
+  badge: BadgeTier;
+  score: number;
+  attested_at: string;
+  corpus_pack_id?: string;
+  replay_bundle_id?: string;
+  merkle_root?: string;
+  payload_hash: string;
+}
+
+export function buildBadgeAttestation(
+  entry: HostedRepoEntry,
+  merkleRoot?: string
+): BadgeAttestation {
+  const repo_id =
+    entry.attribution
+      ? `${entry.attribution.owner}/${entry.attribution.repo}`
+      : entry.id;
+
+  const payload_hash = createHash("sha256")
+    .update(JSON.stringify(entry), "utf8")
+    .digest("hex");
+
+  return {
+    schema_version: 1,
+    repo_id,
+    badge: entry.summary.badge,
+    score: entry.summary.score,
+    attested_at: new Date().toISOString(),
+    ...(merkleRoot !== undefined ? { merkle_root: merkleRoot } : {}),
+    payload_hash
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 5. Merkle Inclusion Verification
+// ---------------------------------------------------------------------------
+
+export function verifyCorpusInclusion(
+  packId: string,
+  snapshot: HostedMerkleSnapshot
+): { included: boolean; leaf_hash?: string } {
+  const leaf = snapshot.leaves.find((l) => l.id === packId);
+  if (leaf) {
+    return { included: true, leaf_hash: leaf.leaf_hash };
+  }
+  return { included: false };
+}
