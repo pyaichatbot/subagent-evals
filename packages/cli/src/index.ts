@@ -465,35 +465,6 @@ export async function runCli(argv: string[]): Promise<void> {
       }
     });
 
-  // shadow flag on eval command
-  // Re-register eval with --shadow support by finding and replacing it above
-  // (already done by modifying the eval command below via addHelpText approach)
-  // Actually, the eval command was already registered above; we need to add --shadow there.
-  // Since we can't modify already-registered commands here, we handle it by
-  // having the eval command defined with --shadow from the start.
-  // Note: The eval command above needs --shadow. Let's add a shadow-eval alias command.
-  program
-    .command("shadow-eval")
-    .argument("[target]", "directory to evaluate in shadow mode")
-    .option("--cwd <cwd>", "working directory")
-    .option("--config <config>", "config path", "subagent-evals.config.yaml")
-    .action(async (target, options) => {
-      const cwd = resolveCommandCwd(target, options.cwd);
-      const configPath = resolve(cwd, options.config);
-      const config = await loadConfig(configPath);
-      config.runtime.shadow_eval = true;
-      const report = await evaluateProject({ cwd, config });
-      const outputJson = resolve(cwd, config.outputs?.json ?? "out/results.json");
-      const outputJUnit = resolve(cwd, config.outputs?.junit ?? "out/results.junit.xml");
-      const outputHtml = resolve(cwd, config.outputs?.html ?? "out/report.html");
-      const outputBadge = resolve(cwd, config.outputs?.badge ?? "out/badge.json");
-      await writeText(outputJson, JSON.stringify(report, null, 2));
-      await writeText(outputJUnit, createJUnitReport(report));
-      await writeText(outputHtml, renderHtmlReport(report));
-      await writeText(outputBadge, JSON.stringify(createBadgeJson(report), null, 2));
-      process.stdout.write("[shadow] Eval complete (non-blocking)\n");
-    });
-
   await program.parseAsync(argv, { from: "user" });
 }
 

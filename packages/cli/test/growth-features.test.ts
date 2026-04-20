@@ -403,6 +403,76 @@ describe("replay export and import cli commands", () => {
   });
 });
 
+describe("eval --shadow flag", () => {
+  it("runs eval in shadow mode and prints shadow message without setting exitCode to 1", async () => {
+    const base = mkdtempSync(join(tmpdir(), "subagent-evals-shadow-"));
+    const agentsDir = join(base, ".claude", "agents");
+    mkdirSync(agentsDir, { recursive: true });
+    writeFileSync(
+      join(agentsDir, "reviewer.md"),
+      `---
+name: reviewer
+description: Reviews code.
+tools: Read
+model: sonnet
+---
+
+You review code. JSON only.
+`,
+      "utf8"
+    );
+
+    const cwd = join(base, "eval-project");
+    mkdirSync(join(cwd, "cases"), { recursive: true });
+    writeFileSync(
+      join(cwd, "subagent-evals.config.yaml"),
+      `discovery:
+  roots:
+    - ../.claude/agents
+  globs:
+    - "**/*.md"
+  format: claude-md
+runtime:
+  runner: command-runner
+  command: node
+  args:
+    - ../example-runner.mjs
+outputs:
+  json: out/results.json
+  junit: out/results.junit.xml
+  html: out/report.html
+  badge: out/badge.json
+`,
+      "utf8"
+    );
+    writeFileSync(
+      join(base, "example-runner.mjs"),
+      `import { readFileSync } from "node:fs";
+const payload = JSON.parse(readFileSync(0, "utf8"));
+process.stdout.write(String(payload.input?.task ?? "done"));
+`,
+      "utf8"
+    );
+
+    let output = "";
+    const origWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (chunk: string | Uint8Array): boolean => {
+      output += chunk.toString();
+      return true;
+    };
+
+    try {
+      await runCli(["eval", cwd, "--shadow"]);
+    } finally {
+      process.stdout.write = origWrite;
+    }
+
+    expect(output).toContain("[shadow] Eval complete (non-blocking)");
+    expect(process.exitCode).not.toBe(1);
+    process.exitCode = 0;
+  });
+});
+
 describe("diff-model cli command", () => {
   it("produces a diff report with parity_score when given fixture results", async () => {
     const dir = mkdtempSync(join(tmpdir(), "subagent-evals-diff-model-"));
