@@ -16,7 +16,6 @@ import {
   evaluateProject,
   evaluateSupplyChain,
   loadConfig,
-  loadRuntimeCases,
   loadTimeSeriesSnapshots,
   normalizeDiscoveredAgent,
   relativePath,
@@ -457,17 +456,15 @@ export async function runCli(argv: string[]): Promise<void> {
       const cwd = resolveCommandCwd(target, undefined);
       const configPath = resolve(cwd, options.config);
       const config = await loadConfig(configPath);
-      const casesDir = resolve(cwd, "cases");
-      const runtimeCases = await loadRuntimeCases(casesDir);
       const currentReport = await evaluateProject({ cwd, config });
-      const result = await evaluateParity({ cwd, config, runtimeCases, currentReport });
+      const result = await evaluateParity({ cwd, config, currentReport });
       const json = JSON.stringify(result, null, 2);
       if (options.output) {
         await writeText(resolve(options.output), json);
       } else {
         process.stdout.write(`${json}\n`);
       }
-      process.stdout.write(`Parity score: ${result.parity_score.toFixed(3)}\n`);
+      process.stderr.write(`Parity score: ${result.parity_score.toFixed(3)}\n`);
     });
 
   // time-series subcommands

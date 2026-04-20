@@ -2374,7 +2374,6 @@ export async function evaluateProject(input: {
     if (existsSync(baselinePath)) {
       try {
         const baselineReport = JSON.parse(await readFile(baselinePath, "utf8")) as EvalReport;
-        diffEvalReports(report, baselineReport);
         const baselineSnapshot: TimeSeriesSnapshot = {
           schema_version: 1,
           created_at: baselineReport.time_series?.[0]?.created_at ?? new Date(0).toISOString(),
@@ -2403,7 +2402,6 @@ export interface DriftReport {
 export async function evaluateParity(input: {
   cwd: string;
   config: EvalConfig;
-  runtimeCases: RuntimeCase[];
   currentReport: EvalReport;
 }): Promise<{ parity_score: number; case_deltas: Array<{ id: string; current_passed: boolean; targets: Array<{ label: string; passed: boolean; score: number }> }> }> {
   const diffTargets = input.config.runtime.diff_targets ?? [];
@@ -2475,7 +2473,8 @@ export async function evaluateParity(input: {
 export async function saveTimeSeriesSnapshot(snapshot: TimeSeriesSnapshot, dir: string): Promise<string> {
   await mkdir(dir, { recursive: true });
   const safeTimestamp = snapshot.created_at.replaceAll(":", "-");
-  const filePath = join(dir, `${safeTimestamp}.json`);
+  const suffix = Math.random().toString(16).slice(2, 8);
+  const filePath = join(dir, `${safeTimestamp}-${suffix}.json`);
   await writeFile(filePath, JSON.stringify(snapshot, null, 2), "utf8");
   return filePath;
 }
@@ -2512,7 +2511,9 @@ export function detectDrift(snapshots: TimeSeriesSnapshot[]): DriftReport {
   const latest = snapshots[snapshots.length - 1]!;
 
   const scoreDelta = round3(latest.summary.score - previous.summary.score);
-  const badgeChanged = latest.summary.badge !== previous.summary.badge;
+  const badgeDegraded = badgeRank(latest.summary.badge) < badgeRank(previous.summary.badge);
+  // badge_changed field still reflects any direction change for information
+  const badge_changed = latest.summary.badge !== previous.summary.badge;
 
   const previousAgentMap = new Map((previous.agents ?? []).map((a) => [a.agent_id, a]));
   const agentRegressions: DriftReport["agent_regressions"] = [];
@@ -2533,9 +2534,9 @@ export function detectDrift(snapshots: TimeSeriesSnapshot[]): DriftReport {
   }
 
   return {
-    has_drift: badgeChanged || agentRegressions.length > 0,
+    has_drift: badgeDegraded || agentRegressions.length > 0,
     score_delta: scoreDelta,
-    badge_changed: badgeChanged,
+    badge_changed,  // informational: true for both improvement and degradation
     agent_regressions: agentRegressions
   };
 }
