@@ -670,6 +670,19 @@ export function renderIndexPage(
         <a class="btn btn--ghost" href="${escapeAttr(opts.repoUrl)}#quickstart" rel="noopener">Quickstart</a>
       </div>
 
+      <section aria-label="Intro video" style="margin:2.5rem 0;">
+        <video
+          controls
+          preload="metadata"
+          poster=""
+          style="width:100%;border-radius:4px;border:1px solid var(--rule);
+                 background:var(--paper2);display:block;"
+          aria-label="subagent-evals intro and usage walkthrough">
+          <source src="${sitePath(opts, "/videos/intro.mp4")}" type="video/mp4"/>
+          Your browser does not support the video element.
+        </video>
+      </section>
+
       <section aria-label="Install">
         <pre class="code-block"><span class="c"># Local CLI usage (npm publish pending)</span>
 node packages/cli/dist/bin/subagent-evals.js lint .

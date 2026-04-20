@@ -12,3 +12,5 @@ out
 apps/hosted/data
 docs/superpowers/
 .video-temp/
+.video-temp-intro/
+.DS_Store

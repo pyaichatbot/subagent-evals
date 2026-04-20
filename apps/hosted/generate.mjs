@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, writeFile, copyFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 
@@ -11,7 +11,8 @@ import {
   renderSitemap
 } from "../../packages/hosted/dist/index.js";
 
-const root = resolve(process.cwd(), "apps/hosted/data");
+const repoRoot = resolve(process.cwd());
+const root = resolve(repoRoot, "apps/hosted/data");
 const submissionsDir = join(root, "submissions");
 const pagesDir = join(root, "pages");
 const registryPath = join(root, "registry.json");
@@ -65,6 +66,15 @@ async function generateSite() {
   await writeFile(join(pagesDir, 'robots.txt'), renderRobotsTxt(), 'utf8');
   await writeFile(join(pagesDir, 'sitemap.xml'), renderSitemap(leaderboard), 'utf8');
   await writeFile(join(pagesDir, '.nojekyll'), '', 'utf8');
+
+  // Copy intro video if it exists
+  const videoSrc = join(repoRoot, 'examples/videos/intro.mp4');
+  if (existsSync(videoSrc)) {
+    const videoDest = join(pagesDir, 'videos');
+    await ensureDir(videoDest);
+    await copyFile(videoSrc, join(videoDest, 'intro.mp4'));
+    console.log('Copied intro.mp4 → pages/videos/intro.mp4');
+  }
 }
 
 generateSite().catch((error) => {
