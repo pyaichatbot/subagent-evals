@@ -473,6 +473,183 @@ process.stdout.write(String(payload.input?.task ?? "done"));
   });
 });
 
+describe("parity cli command", () => {
+  it("with no diff_targets in config: parity_score is 1 in output JSON, exit 0", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "subagent-evals-parity-"));
+    const config = `
+discovery:
+  roots: ["."]
+  format: claude-md
+runtime:
+  runner: command-runner
+  mode: replay
+  snapshot_dir: .subagent-evals/cache
+  allow_live_fallback: false
+`;
+    writeFileSync(join(dir, "subagent-evals.config.yaml"), config, "utf8");
+
+    const outputPath = join(dir, "parity.json");
+
+    let output = "";
+    const origWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (chunk: string | Uint8Array): boolean => {
+      output += chunk.toString();
+      return true;
+    };
+
+    try {
+      await runCli(["parity", dir, "--config", join(dir, "subagent-evals.config.yaml"), "--output", outputPath]);
+    } finally {
+      process.stdout.write = origWrite;
+    }
+
+    const report = JSON.parse(readFileSync(outputPath, "utf8")) as { parity_score: number; case_deltas: unknown[] };
+    expect(report.parity_score).toBe(1);
+    expect(report.case_deltas).toEqual([]);
+    expect(process.exitCode).not.toBe(1);
+    process.exitCode = 0;
+  });
+});
+
+describe("time-series cli commands", () => {
+  it("time-series list: on empty/non-existent dir prints nothing and exits 0", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "subagent-evals-ts-cli-"));
+    const nonExistentDir = join(dir, "does-not-exist");
+
+    let output = "";
+    const origWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (chunk: string | Uint8Array): boolean => {
+      output += chunk.toString();
+      return true;
+    };
+
+    try {
+      await runCli(["time-series", "list", "--dir", nonExistentDir]);
+    } finally {
+      process.stdout.write = origWrite;
+    }
+
+    expect(output.trim()).toBe("");
+    expect(process.exitCode).not.toBe(1);
+    process.exitCode = 0;
+  });
+
+  it("time-series diff: on empty/non-existent dir has_drift false in output, exit 0", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "subagent-evals-ts-diff-cli-"));
+    const nonExistentDir = join(dir, "does-not-exist");
+
+    let output = "";
+    const origWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (chunk: string | Uint8Array): boolean => {
+      output += chunk.toString();
+      return true;
+    };
+
+    try {
+      await runCli(["time-series", "diff", "--dir", nonExistentDir]);
+    } finally {
+      process.stdout.write = origWrite;
+    }
+
+    const parsed = JSON.parse(output) as { has_drift: boolean };
+    expect(parsed.has_drift).toBe(false);
+    expect(process.exitCode).not.toBe(1);
+    process.exitCode = 0;
+  });
+});
+
+describe("merkle cli commands", () => {
+  it("merkle snapshot: with empty leaderboard JSON [] writes a snapshot with leaf_count 0", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "subagent-evals-merkle-"));
+    const leaderboardFile = join(dir, "leaderboard.json");
+    const outputFile = join(dir, "snapshot.json");
+    writeFileSync(leaderboardFile, "[]", "utf8");
+
+    let stderr = "";
+    const origStderr = process.stderr.write.bind(process.stderr);
+    process.stderr.write = (chunk: string | Uint8Array): boolean => {
+      stderr += chunk.toString();
+      return true;
+    };
+
+    try {
+      await runCli(["merkle", "snapshot", "--input", leaderboardFile, "--output", outputFile]);
+    } finally {
+      process.stderr.write = origStderr;
+    }
+
+    const snapshot = JSON.parse(readFileSync(outputFile, "utf8")) as { leaves: unknown[]; root: string };
+    expect(Array.isArray(snapshot.leaves)).toBe(true);
+    expect(snapshot.leaves).toHaveLength(0);
+    expect(typeof snapshot.root).toBe("string");
+    expect(stderr).toContain("leaves=0");
+    process.exitCode = 0;
+  });
+
+  it("merkle verify: with a snapshot that has a matching leaf exits 0", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "subagent-evals-merkle-verify-"));
+    const snapshot = {
+      root: "abc123",
+      generated_at: "2026-04-19T00:00:00Z",
+      leaves: [{ id: "spy/test-repo", leaf_hash: "deadbeef" }]
+    };
+    const snapshotFile = join(dir, "snapshot.json");
+    writeFileSync(snapshotFile, JSON.stringify(snapshot), "utf8");
+
+    await runCli(["merkle", "verify", "--snapshot", snapshotFile, "--entry", "spy/test-repo"]);
+    expect(process.exitCode).toBe(0);
+    process.exitCode = 0;
+  });
+
+  it("merkle verify: with a snapshot without matching leaf exits 1", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "subagent-evals-merkle-verify-miss-"));
+    const snapshot = {
+      root: "abc123",
+      generated_at: "2026-04-19T00:00:00Z",
+      leaves: [{ id: "spy/test-repo", leaf_hash: "deadbeef" }]
+    };
+    const snapshotFile = join(dir, "snapshot.json");
+    writeFileSync(snapshotFile, JSON.stringify(snapshot), "utf8");
+
+    await runCli(["merkle", "verify", "--snapshot", snapshotFile, "--entry", "not-in-snapshot"]);
+    expect(process.exitCode).toBe(1);
+    process.exitCode = 0;
+  });
+});
+
+describe("corpus sign cli command", () => {
+  it("signs a YAML corpus file with sha256: output file contains signature block", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "subagent-evals-corpus-sign-"));
+    const corpusContent = `pack_id: test-pack-sign
+pack_version: 1.0.0
+pack_type: prompt-injection
+created_at: "2026-04-19T00:00:00Z"
+cases: []
+`;
+    const inputFile = join(dir, "corpus.yaml");
+    const outputFile = join(dir, "corpus-signed.yaml");
+    writeFileSync(inputFile, corpusContent, "utf8");
+
+    let stdout = "";
+    const origWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (chunk: string | Uint8Array): boolean => {
+      stdout += chunk.toString();
+      return true;
+    };
+
+    try {
+      await runCli(["corpus", "sign", "--input", inputFile, "--method", "sha256", "--output", outputFile]);
+    } finally {
+      process.stdout.write = origWrite;
+    }
+
+    const signed = readFileSync(outputFile, "utf8");
+    expect(signed).toContain("signature:");
+    expect(stdout).toContain("sha256");
+    process.exitCode = 0;
+  });
+});
+
 describe("diff-model cli command", () => {
   it("produces a diff report with parity_score when given fixture results", async () => {
     const dir = mkdtempSync(join(tmpdir(), "subagent-evals-diff-model-"));
