@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { evaluateSupplyChain, type EvalConfig } from "../src/index.js";
+import { evaluateSupplyChain, defaultConfig, loadConfig, type EvalConfig } from "../src/index.js";
 
 function makeConfig(manifests: string[]): EvalConfig {
   return {
@@ -12,6 +12,37 @@ function makeConfig(manifests: string[]): EvalConfig {
     supply_chain: { manifests }
   };
 }
+
+describe("defaultConfig supply_chain opt-in", () => {
+  it("defaultConfig has empty manifests array (supply chain is opt-in)", () => {
+    const config = defaultConfig();
+    expect(config.supply_chain?.manifests).toEqual([]);
+  });
+
+  it("loadConfig with no supply_chain section yields empty manifests", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "load-config-"));
+    const configPath = join(dir, "subagent-evals.yaml");
+    writeFileSync(
+      configPath,
+      "discovery:\n  roots: [.]\n  format: auto\nruntime:\n  runner: command-runner\n",
+      "utf8"
+    );
+    const config = await loadConfig(configPath);
+    expect(config.supply_chain?.manifests).toEqual([]);
+  });
+
+  it("loadConfig with explicit supply_chain.manifests uses those manifests", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "load-config-sc-"));
+    const configPath = join(dir, "subagent-evals.yaml");
+    writeFileSync(
+      configPath,
+      "discovery:\n  roots: [.]\n  format: auto\nruntime:\n  runner: command-runner\nsupply_chain:\n  manifests:\n    - package.json\n",
+      "utf8"
+    );
+    const config = await loadConfig(configPath);
+    expect(config.supply_chain?.manifests).toEqual(["package.json"]);
+  });
+});
 
 describe("evaluateSupplyChain", () => {
   it("returns clean report for project with pinned package.json deps", async () => {
