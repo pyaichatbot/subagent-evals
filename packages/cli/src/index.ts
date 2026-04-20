@@ -20,11 +20,17 @@ import {
   normalizeDiscoveredAgent,
   relativePath,
   renderPrComment,
+  signCorpusPack,
   verifyCorpusPack,
   type DiscoveryFormat,
   type ModelDiffReport,
   type ReplayBundle
 } from "@subagent-evals/core";
+import {
+  buildMerkleSnapshot,
+  type HostedRepoEntry,
+  type HostedMerkleSnapshot
+} from "@subagent-evals/hosted";
 import { renderHtmlReport } from "@subagent-evals/report-html";
 
 async function ensureDir(path: string): Promise<void> {
@@ -444,7 +450,80 @@ export async function runCli(argv: string[]): Promise<void> {
       })
   );
 
+  corpusCmd.addCommand(
+    new Command("sign")
+      .requiredOption("--input <input>", "corpus file path (YAML or JSON)")
+      .option("--method <method>", "signing method: sha256 | cosign", "sha256")
+      .option("--output <output>", "output file path (defaults to overwriting --input)")
+      .action(async (options) => {
+        const filePath = resolve(options.input);
+        const packContent = await readFile(filePath, "utf8");
+        const method = options.method as "sha256" | "cosign";
+        const sig = await signCorpusPack({ packContent, method });
+        const parsed = filePath.endsWith(".json")
+          ? JSON.parse(packContent)
+          : yaml.load(packContent);
+        if (typeof parsed !== "object" || parsed === null) {
+          throw new Error("Corpus pack must be an object");
+        }
+        const pack = parsed as Record<string, unknown>;
+        pack.signature = { type: sig.type, value: sig.value };
+        const outPath = options.output ? resolve(options.output) : filePath;
+        const serialized = filePath.endsWith(".json") || (options.output ?? "").endsWith(".json")
+          ? JSON.stringify(pack, null, 2)
+          : yaml.dump(pack);
+        await ensureDir(dirname(outPath));
+        await writeFile(outPath, serialized, "utf8");
+        const preview = sig.value.length > 40 ? `${sig.value.slice(0, 40)}...` : sig.value;
+        process.stdout.write(`Signed with ${sig.type}: ${preview}\n`);
+      })
+  );
+
   program.addCommand(corpusCmd);
+
+  // merkle subcommands
+  const merkleCmd = new Command("merkle");
+
+  merkleCmd.addCommand(
+    new Command("snapshot")
+      .requiredOption("--input <input>", "leaderboard JSON file (array of HostedRepoEntry)")
+      .option("--output <output>", "output snapshot JSON file (defaults to stdout)")
+      .action(async (options) => {
+        const filePath = resolve(options.input);
+        const leaderboard = JSON.parse(await readFile(filePath, "utf8")) as HostedRepoEntry[];
+        const snapshot = buildMerkleSnapshot(leaderboard, new Date().toISOString());
+        const json = JSON.stringify(snapshot, null, 2);
+        if (options.output) {
+          await ensureDir(dirname(resolve(options.output)));
+          await writeFile(resolve(options.output), json, "utf8");
+        } else {
+          process.stdout.write(`${json}\n`);
+        }
+        const rootPreview = snapshot.root.length > 16 ? `${snapshot.root.slice(0, 16)}...` : snapshot.root;
+        process.stderr.write(`Merkle snapshot: root=${rootPreview} leaves=${snapshot.leaves.length}\n`);
+      })
+  );
+
+  merkleCmd.addCommand(
+    new Command("verify")
+      .requiredOption("--snapshot <snapshot>", "snapshot JSON file")
+      .requiredOption("--entry <id>", "entry id to verify")
+      .action(async (options) => {
+        const snapshotPath = resolve(options.snapshot);
+        const snapshot = JSON.parse(await readFile(snapshotPath, "utf8")) as HostedMerkleSnapshot;
+        const leaf = snapshot.leaves.find((l) => l.id === options.entry);
+        if (leaf) {
+          const hashPreview = leaf.leaf_hash.length > 16 ? `${leaf.leaf_hash.slice(0, 16)}...` : leaf.leaf_hash;
+          process.stdout.write(`✓ Entry ${options.entry} is included (leaf_hash=${hashPreview})\n`);
+          process.exitCode = 0;
+        } else {
+          process.stdout.write(`✗ Entry ${options.entry} not found in snapshot\n`);
+          process.exitCode = 1;
+        }
+      })
+  );
+
+  program.addCommand(merkleCmd);
 
   // parity command
   program

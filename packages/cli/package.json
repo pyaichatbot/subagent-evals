@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "@subagent-evals/core": "workspace:*",
+    "@subagent-evals/hosted": "workspace:*",
     "@subagent-evals/report-html": "workspace:*",
     "commander": "14.0.3",
     "js-yaml": "4.1.1"

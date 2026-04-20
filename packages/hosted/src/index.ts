@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import type { BadgeTier, SubmissionPayload } from "@subagent-evals/core";
 
 export interface HostedRepoEntry {
@@ -758,4 +760,48 @@ export function renderSitemap(
     )
     .join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${body}\n</urlset>\n`;
+}
+
+export interface HostedMerkleLeaf {
+  id: string;
+  leaf_hash: string;
+}
+
+export interface HostedMerkleSnapshot {
+  root: string;
+  generated_at: string;
+  leaves: HostedMerkleLeaf[];
+}
+
+function sha256Hex(data: string): string {
+  return createHash("sha256").update(data, "utf8").digest("hex");
+}
+
+function buildMerkleRoot(hashes: string[]): string {
+  if (hashes.length === 0) {
+    return sha256Hex("");
+  }
+  let layer = hashes.slice();
+  while (layer.length > 1) {
+    const next: string[] = [];
+    for (let i = 0; i < layer.length; i += 2) {
+      const left = layer[i]!;
+      const right = layer[i + 1] ?? left;
+      next.push(sha256Hex(left + right));
+    }
+    layer = next;
+  }
+  return layer[0]!;
+}
+
+export function buildMerkleSnapshot(
+  leaderboard: HostedRepoEntry[],
+  generatedAt: string
+): HostedMerkleSnapshot {
+  const leaves: HostedMerkleLeaf[] = leaderboard.map((entry) => ({
+    id: entry.id,
+    leaf_hash: sha256Hex(JSON.stringify(entry))
+  }));
+  const root = buildMerkleRoot(leaves.map((l) => l.leaf_hash));
+  return { root, generated_at: generatedAt, leaves };
 }

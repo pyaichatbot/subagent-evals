@@ -2574,3 +2574,86 @@ export async function listMarkdownFiles(root: string): Promise<string[]> {
 export function relativePath(cwd: string, target: string): string {
   return relative(cwd, target) || ".";
 }
+
+export async function signCorpusPack(input: {
+  packContent: string;
+  method: "sha256" | "cosign";
+}): Promise<{ type: "sha256" | "sigstore"; value: string }> {
+  const { packContent, method } = input;
+
+  if (method === "sha256") {
+    const digest = createHash("sha256").update(packContent, "utf8").digest("hex");
+    return { type: "sha256", value: digest };
+  }
+
+  // cosign path
+  return new Promise((resolve) => {
+    let bundleJson = "";
+    let stderr = "";
+    let exited = false;
+
+    const child = spawn("cosign", ["sign-blob", "--bundle", "/dev/stdout", "-"], {
+      stdio: ["pipe", "pipe", "pipe"]
+    });
+
+    child.stdout.on("data", (chunk: Buffer) => {
+      bundleJson += chunk.toString("utf8");
+    });
+
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString("utf8");
+    });
+
+    child.on("error", () => {
+      if (!exited) {
+        exited = true;
+        console.warn("[signCorpusPack] cosign not available, falling back to sha256");
+        const digest = createHash("sha256").update(packContent, "utf8").digest("hex");
+        resolve({ type: "sha256", value: digest });
+      }
+    });
+
+    child.on("close", (code: number | null) => {
+      if (!exited) {
+        exited = true;
+        if (code === 0 && bundleJson.trim().length > 0) {
+          resolve({ type: "sigstore", value: bundleJson.trim() });
+        } else {
+          console.warn(
+            `[signCorpusPack] cosign exited with code ${code}${stderr ? `: ${stderr.trim()}` : ""}, falling back to sha256`
+          );
+          const digest = createHash("sha256").update(packContent, "utf8").digest("hex");
+          resolve({ type: "sha256", value: digest });
+        }
+      }
+    });
+
+    child.stdin.write(packContent, "utf8");
+    child.stdin.end();
+  });
+}
+
+export interface JudgeMetrics {
+  judge_score?: number;
+  hallucination_rate?: number;
+  long_context_decay?: number;
+  citation_faithfulness?: number;
+}
+
+export function evaluateJudgeMetrics(artifact: RunArtifact): JudgeMetrics {
+  const raw = artifact.raw ?? {};
+  const result: JudgeMetrics = {};
+  if (typeof raw.judge_score === "number") {
+    result.judge_score = raw.judge_score;
+  }
+  if (typeof raw.hallucination_rate === "number") {
+    result.hallucination_rate = raw.hallucination_rate;
+  }
+  if (typeof raw.long_context_decay === "number") {
+    result.long_context_decay = raw.long_context_decay;
+  }
+  if (typeof raw.citation_faithfulness === "number") {
+    result.citation_faithfulness = raw.citation_faithfulness;
+  }
+  return result;
+}

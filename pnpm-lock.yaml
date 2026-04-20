@@ -26,6 +26,9 @@ importers:
       '@subagent-evals/core':
         specifier: workspace:*
         version: link:../core
+      '@subagent-evals/hosted':
+        specifier: workspace:*
+        version: link:../hosted
       '@subagent-evals/report-html':
         specifier: workspace:*
         version: link:../report-html
