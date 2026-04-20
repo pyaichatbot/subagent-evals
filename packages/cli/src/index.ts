@@ -469,7 +469,7 @@ export async function runCli(argv: string[]): Promise<void> {
         const pack = parsed as Record<string, unknown>;
         pack.signature = { type: sig.type, value: sig.value };
         const outPath = options.output ? resolve(options.output) : filePath;
-        const serialized = filePath.endsWith(".json") || (options.output ?? "").endsWith(".json")
+        const serialized = outPath.endsWith(".json")
           ? JSON.stringify(pack, null, 2)
           : yaml.dump(pack);
         await ensureDir(dirname(outPath));
@@ -510,7 +510,19 @@ export async function runCli(argv: string[]): Promise<void> {
       .requiredOption("--entry <id>", "entry id to verify")
       .action(async (options) => {
         const snapshotPath = resolve(options.snapshot);
-        const snapshot = JSON.parse(await readFile(snapshotPath, "utf8")) as HostedMerkleSnapshot;
+        let snapshot: HostedMerkleSnapshot;
+        try {
+          snapshot = JSON.parse(await readFile(snapshotPath, "utf8")) as HostedMerkleSnapshot;
+        } catch {
+          process.stderr.write(`Error: cannot parse snapshot file: ${snapshotPath}\n`);
+          process.exitCode = 2;
+          return;
+        }
+        if (!Array.isArray(snapshot.leaves)) {
+          process.stderr.write(`Error: snapshot missing 'leaves' array\n`);
+          process.exitCode = 2;
+          return;
+        }
         const leaf = snapshot.leaves.find((l) => l.id === options.entry);
         if (leaf) {
           const hashPreview = leaf.leaf_hash.length > 16 ? `${leaf.leaf_hash.slice(0, 16)}...` : leaf.leaf_hash;
