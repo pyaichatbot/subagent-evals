@@ -67,13 +67,16 @@ async function generateSite() {
   await writeFile(join(pagesDir, 'sitemap.xml'), renderSitemap(leaderboard), 'utf8');
   await writeFile(join(pagesDir, '.nojekyll'), '', 'utf8');
 
-  // Copy intro video if it exists
-  const videoSrc = join(repoRoot, 'examples/videos/intro.mp4');
-  if (existsSync(videoSrc)) {
-    const videoDest = join(pagesDir, 'videos');
-    await ensureDir(videoDest);
-    await copyFile(videoSrc, join(videoDest, 'intro.mp4'));
-    console.log('Copied intro.mp4 → pages/videos/intro.mp4');
+  // Copy intro video and cover image if they exist
+  const videoDest = join(pagesDir, 'videos');
+  await ensureDir(videoDest);
+  const videoAssets = ['intro.mp4', 'intro-cover.jpg'];
+  for (const asset of videoAssets) {
+    const src = join(repoRoot, 'examples/videos', asset);
+    if (existsSync(src)) {
+      await copyFile(src, join(videoDest, asset));
+      console.log(`Copied ${asset} → pages/videos/${asset}`);
+    }
   }
 }
 

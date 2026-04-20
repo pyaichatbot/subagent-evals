@@ -674,7 +674,7 @@ export function renderIndexPage(
         <video
           controls
           preload="metadata"
-          poster=""
+          poster="${sitePath(opts, "/videos/intro-cover.jpg")}"
           style="width:100%;border-radius:4px;border:1px solid var(--rule);
                  background:var(--paper2);display:block;"
           aria-label="subagent-evals intro and usage walkthrough">
