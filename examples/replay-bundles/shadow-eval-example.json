@@ -1,0 +1,25 @@
+{
+  "schema_version": "shadow-eval.v1",
+  "mode": "comparison-only",
+  "current": {
+    "score": 0.86,
+    "badge": "strong"
+  },
+  "baseline": {
+    "score": 0.91,
+    "badge": "certified"
+  },
+  "regressions": [
+    {
+      "dimension": "determinism_score",
+      "delta": -0.22
+    },
+    {
+      "dimension": "tool_scope_containment",
+      "delta": -0.14
+    }
+  ],
+  "gating": {
+    "enforced": false
+  }
+}

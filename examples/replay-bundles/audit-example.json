@@ -1,0 +1,26 @@
+{
+  "schema_version": "audit.v1",
+  "repo": "example-repo",
+  "manifests": [
+    "package.json",
+    "pnpm-lock.yaml"
+  ],
+  "findings": [
+    {
+      "severity": "medium",
+      "type": "floating-dependency",
+      "package": "yaml",
+      "specifier": "^2.0.0"
+    },
+    {
+      "severity": "high",
+      "type": "suspicious-package-name",
+      "package": "cross-envv",
+      "reason": "Looks similar to cross-env"
+    }
+  ],
+  "license_hygiene": {
+    "status": "review-needed",
+    "notes": ["Repository mixes MIT code with copied GPL snippet in docs fixture"]
+  }
+}

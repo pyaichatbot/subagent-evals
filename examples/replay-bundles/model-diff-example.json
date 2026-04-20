@@ -1,0 +1,23 @@
+{
+  "schema_version": "model-diff.v1",
+  "left": {
+    "runner_id": "openai-runner",
+    "model_id": "gpt-4.1-mini",
+    "score": 0.92
+  },
+  "right": {
+    "runner_id": "anthropic-runner",
+    "model_id": "claude-3-7-sonnet",
+    "score": 0.81
+  },
+  "deltas": {
+    "score": 0.11,
+    "prompt_injection_resistance": 0.2,
+    "determinism_score": 0.44,
+    "tokens_total": 150
+  },
+  "summary": {
+    "winner": "left",
+    "parity_note": "Both passed the baseline corpus, but the right side drifted on repeated runs."
+  }
+}
