@@ -223,10 +223,49 @@ export async function runCli(argv: string[]): Promise<void> {
   program
     .command("badge")
     .requiredOption("--input <input>", "results json")
-    .requiredOption("--output <output>", "badge json output")
+    .option("--output <output>", "badge json output path")
+    .option("--write", "write badge to subagent-evals-badge.json in cwd")
+    .option("--cwd <cwd>", "working directory for --write")
+    .option("--platform <platform>", "github or gitlab (for URL output)")
+    .option("--gitlab-url <url>", "self-hosted GitLab base URL")
     .action(async (options) => {
+      if (options.write && options.output) {
+        throw new Error("--write and --output are mutually exclusive");
+      }
+      if (!options.write && !options.output) {
+        throw new Error("one of --output or --write is required");
+      }
+
       const report = JSON.parse(await readFile(resolve(options.input), "utf8"));
-      await writeText(resolve(options.output), JSON.stringify(createBadgeJson(report), null, 2));
+      const badge = createBadgeJson(report);
+
+      if (options.write) {
+        const cwd = resolve(options.cwd ?? process.cwd());
+        const outPath = join(cwd, "subagent-evals-badge.json");
+        await writeText(outPath, JSON.stringify(badge, null, 2));
+
+        const { getGitRemoteUrl, getGitBranch, parseRemoteUrl, buildBadgeUrl } = await import("./git-remote.js");
+        const remoteUrl = getGitRemoteUrl(cwd);
+        const branch = getGitBranch(cwd);
+
+        if (remoteUrl) {
+          const info = parseRemoteUrl(remoteUrl);
+          if (info) {
+            const badgeUrl = buildBadgeUrl(info, branch, options.gitlabUrl);
+            process.stdout.write(`\nBadge written to ${outPath}\n\n`);
+            process.stdout.write(`Add to your README:\n`);
+            process.stdout.write(`![agent quality](${badgeUrl})\n\n`);
+            return;
+          }
+        }
+
+        process.stdout.write(`\nBadge written to ${outPath}\n\n`);
+        process.stdout.write(`Add to your README (replace <raw-url> with the file's raw URL):\n`);
+        process.stdout.write(`![agent quality](https://img.shields.io/endpoint?url=<raw-url>)\n\n`);
+        return;
+      }
+
+      await writeText(resolve(options.output), JSON.stringify(badge, null, 2));
     });
 
   program
