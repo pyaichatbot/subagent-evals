@@ -8,7 +8,8 @@ import {
   renderLeaderboardPage,
   renderRepoPage,
   renderRobotsTxt,
-  renderSitemap
+  renderSitemap,
+  renderStateOfAgentsPage
 } from "../../packages/hosted/dist/index.js";
 
 const repoRoot = resolve(process.cwd());
@@ -66,6 +67,16 @@ async function generateSite() {
   await writeFile(join(pagesDir, 'robots.txt'), renderRobotsTxt(), 'utf8');
   await writeFile(join(pagesDir, 'sitemap.xml'), renderSitemap(leaderboard), 'utf8');
   await writeFile(join(pagesDir, '.nojekyll'), '', 'utf8');
+
+  // State of Agents report page (optional — skipped if data file absent)
+  const stateOfAgentsDataPath = join(root, 'state-of-agents.json');
+  if (existsSync(stateOfAgentsDataPath)) {
+    const stateData = JSON.parse(await readFile(stateOfAgentsDataPath, 'utf8'));
+    const stateDir = join(pagesDir, 'state-of-agents');
+    await ensureDir(stateDir);
+    await writeFile(join(stateDir, 'index.html'), renderStateOfAgentsPage(stateData), 'utf8');
+    console.log('Generated state-of-agents/index.html');
+  }
 
   // Copy intro video and cover image if they exist
   const videoDest = join(pagesDir, 'videos');
