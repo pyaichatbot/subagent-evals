@@ -8,7 +8,8 @@ export default defineConfig({
       "@subagent-evals/report-html": resolve(
         __dirname,
         "packages/report-html/src/index.ts"
-      )
+      ),
+      "@subagent-evals/hosted": resolve(__dirname, "packages/hosted/src/index.ts")
     }
   },
   test: {

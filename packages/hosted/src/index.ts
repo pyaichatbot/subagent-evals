@@ -278,6 +278,7 @@ function renderHeader(options: ReturnType<typeof resolveOptions>, active?: strin
     </a>
     <nav class="nav" aria-label="Primary">
       <a href="${sitePath(options, "/leaderboard")}"${isLeaderboard ? ' aria-current="page"' : ""}>Leaderboard</a>
+      <a href="${sitePath(options, "/state-of-agents")}"${active === "state-of-agents" ? ' aria-current="page"' : ""}>State of Agents</a>
       <a href="${escapeAttr(options.repoUrl)}/tree/main/docs"${isDocs ? ' aria-current="page"' : ""} rel="noopener">Docs</a>
       <a href="${escapeAttr(options.repoUrl)}" rel="noopener">GitHub</a>
     </nav>
@@ -754,6 +755,7 @@ export function renderSitemap(
   const urls = [
     { loc: `${opts.baseUrl}/`, priority: "1.0", changefreq: "daily" },
     { loc: `${opts.baseUrl}/leaderboard`, priority: "0.9", changefreq: "daily" },
+    { loc: `${opts.baseUrl}/state-of-agents/`, priority: "0.8", changefreq: "monthly" },
     ...normalized
       .filter((entry) => entry.attribution)
       .map((entry) => ({
@@ -1013,4 +1015,125 @@ export function verifyCorpusInclusion(
     return { included: true, leaf_hash: leaf.leaf_hash };
   }
   return { included: false };
+}
+
+// ---------------------------------------------------------------------------
+// State of AI Agents Report
+// ---------------------------------------------------------------------------
+
+export interface StateOfAgentsPlatformStats {
+  count: number;
+  avg_score: number;
+  tiers: { certified: number; strong: number; usable: number; experimental: number };
+}
+
+export interface StateOfAgentsRepo {
+  owner: string;
+  repo: string;
+  sha: string;
+  platform: string;
+  score: number;
+  tier: string;
+}
+
+export interface StateOfAgentsData {
+  period: string;
+  generated: string;
+  sample_size: number;
+  caveat: string;
+  repos: StateOfAgentsRepo[];
+  by_platform: Record<string, StateOfAgentsPlatformStats>;
+  top_failures: string[];
+  top_passes: string[];
+}
+
+export function renderStateOfAgentsPage(
+  data: StateOfAgentsData,
+  options?: HostedRenderOptions
+): string {
+  const opts = resolveOptions(options);
+  const canonical = `${opts.baseUrl}/state-of-agents/`;
+
+  const platformRows = Object.entries(data.by_platform)
+    .map(([platform, stats]) => {
+      const tierBreakdown = Object.entries(stats.tiers)
+        .filter(([, n]) => n > 0)
+        .map(([t, n]) => `${n} ${t}`)
+        .join(", ") || "none";
+      return `<tr>
+        <td>${escapeHtml(platform)}</td>
+        <td>${stats.count}</td>
+        <td style="font-family:var(--mono)">${stats.avg_score.toFixed(3)}</td>
+        <td>${escapeHtml(tierBreakdown)}</td>
+      </tr>`;
+    })
+    .join("\n");
+
+  const repoRows = data.repos
+    .map(
+      (r, i) => `<tr>
+        <td class="rank">${String(i + 1).padStart(2, "0")}</td>
+        <td class="repo"><a href="https://github.com/${escapeHtml(r.owner)}/${escapeHtml(r.repo)}" rel="noopener">${escapeHtml(r.owner)}/${escapeHtml(r.repo)}</a></td>
+        <td>${escapeHtml(r.platform)}</td>
+        <td><span class="tier-pill" style="color:${tierColor(r.tier as BadgeTier)}">${escapeHtml(tierLabel(r.tier as BadgeTier))}</span></td>
+        <td class="score" style="font-family:var(--mono)">${r.score.toFixed(3)}</td>
+        <td style="font-family:var(--mono);font-size:.75rem;color:var(--muted)">${escapeHtml(r.sha.slice(0, 7))}</td>
+      </tr>`
+    )
+    .join("\n");
+
+  const failureItems = data.top_failures
+    .map((f) => `<li>${escapeHtml(f)}</li>`)
+    .join("\n");
+  const passItems = data.top_passes
+    .map((p) => `<li>${escapeHtml(p)}</li>`)
+    .join("\n");
+
+  const content = `
+  <div class="container">
+    <p class="eyebrow">State of AI Agents</p>
+    <h1 class="display">${escapeHtml(data.period)} Report</h1>
+    <p class="lede">We evaluated ${data.sample_size} public AI agent configs across Claude Code, Cursor, and Copilot. Here&#39;s what we found.</p>
+
+    <div class="grid" style="margin-bottom:2rem">
+      <div class="stat"><p class="stat__label">Repos evaluated</p><p class="stat__value">${data.sample_size}</p></div>
+      <div class="stat"><p class="stat__label">Platforms covered</p><p class="stat__value">${Object.keys(data.by_platform).length}</p></div>
+      <div class="stat"><p class="stat__label">Generated</p><p class="stat__value" style="font-size:1.1rem">${escapeHtml(data.generated.slice(0, 10))}</p></div>
+    </div>
+
+    <h2 class="display">By Platform</h2>
+    <table class="table" aria-label="Platform breakdown">
+      <thead><tr><th>Platform</th><th>Repos</th><th>Avg Score</th><th>Tiers</th></tr></thead>
+      <tbody>${platformRows}</tbody>
+    </table>
+
+    <h2 class="display">All Repos</h2>
+    <table class="table" aria-label="Evaluated repositories">
+      <thead><tr><th>#</th><th>Repository</th><th>Platform</th><th>Tier</th><th style="text-align:right">Score</th><th>Commit</th></tr></thead>
+      <tbody>${repoRows}</tbody>
+    </table>
+
+    <div class="grid" style="margin-top:2rem">
+      <div class="stat">
+        <p class="stat__label">Top failures</p>
+        <ul style="margin:.5rem 0 0;padding-left:1.2rem;font-size:.9rem">${failureItems}</ul>
+      </div>
+      <div class="stat">
+        <p class="stat__label">Top passes</p>
+        <ul style="margin:.5rem 0 0;padding-left:1.2rem;font-size:.9rem">${passItems}</ul>
+      </div>
+    </div>
+
+    <hr class="rule" />
+    <p style="color:var(--muted);font-size:.85rem">${escapeHtml(data.caveat)}</p>
+  </div>`;
+
+  return pageShell({
+    title: `State of AI Agents ${escapeHtml(data.period)} — ${opts.siteName}`,
+    description: `We evaluated ${data.sample_size} public AI agent configs. Average scores, tier breakdown, and key findings.`,
+    canonical,
+    activeNav: "state-of-agents",
+    content,
+    options: opts
+  });
 }
