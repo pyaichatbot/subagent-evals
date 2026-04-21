@@ -1,32 +1,190 @@
 {
   "period": "2026-Q2",
-  "generated": "2026-04-21T05:48:16.244Z",
-  "sample_size": 1,
-  "caveat": "Sample of repos selected for activity and star count. Not a random sample. Results reflect these specific configs at pinned commits and may not generalize.",
+  "generated": "2026-04-21T05:59:55.022Z",
+  "sample_size": 16,
+  "caveat": "Sample selected from the highest-starred public GitHub search results for CLAUDE.md, .cursorrules, copilot-instructions.md, and AGENTS.md. Only repos with supported agent config files discovered by subagent-evals are included. Results reflect pinned commits and may not generalize.",
   "repos": [
     {
-      "owner": "getcursor",
-      "repo": "cursor",
-      "sha": "53a1e5adf5b0db7a08bbe47cf8be207c3740bce5",
+      "owner": "forrestchang",
+      "repo": "andrej-karpathy-skills",
+      "sha": "2c606141936f1eeef17fa3043a72095b4765b9c2",
+      "platform": "claude-code",
+      "stars": 68336,
+      "score": 0.613,
+      "tier": "usable"
+    },
+    {
+      "owner": "PatrickJS",
+      "repo": "awesome-cursorrules",
+      "sha": "fc2ce049c55b369b498eef396506a7a269a1b461",
       "platform": "cursor",
+      "stars": 39180,
+      "score": 0.589,
+      "tier": "usable"
+    },
+    {
+      "owner": "wasp-lang",
+      "repo": "open-saas",
+      "sha": "746cea468881cfbf9930b1a040f312a6343e5f3b",
+      "platform": "claude-code",
+      "stars": 14183,
+      "score": 0.572,
+      "tier": "usable"
+    },
+    {
+      "owner": "Piebald-AI",
+      "repo": "claude-code-system-prompts",
+      "sha": "32f09bdd42753057ec218b9e512d34cc6333b433",
+      "platform": "claude-code",
+      "stars": 9188,
       "score": 0.578,
       "tier": "usable"
+    },
+    {
+      "owner": "grapeot",
+      "repo": "devin.cursorrules",
+      "sha": "284b743cca749a290bfe726e2e40466d207d7c9b",
+      "platform": "cursor",
+      "stars": 5960,
+      "score": 0.585,
+      "tier": "usable"
+    },
+    {
+      "owner": "drona23",
+      "repo": "claude-token-efficient",
+      "sha": "23a4dab3a4fc681d1e7df3a012af691c542ab2e9",
+      "platform": "claude-code",
+      "stars": 3644,
+      "score": 0.621,
+      "tier": "usable"
+    },
+    {
+      "owner": "Piebald-AI",
+      "repo": "tweakcc",
+      "sha": "6062474d412a7131cdbd47c8b605b60b9e73bc86",
+      "platform": "claude-code",
+      "stars": 1817,
+      "score": 0.573,
+      "tier": "usable"
+    },
+    {
+      "owner": "kinopeee",
+      "repo": "cursorrules",
+      "sha": "46ec520020726fa0f56991f0690ae9d2423eab5e",
+      "platform": "cursor",
+      "stars": 1118,
+      "score": 0.59,
+      "tier": "usable"
+    },
+    {
+      "owner": "BayramAnnakov",
+      "repo": "claude-reflect",
+      "sha": "8dc9db43c9bfaa53b567d63f3f48385bcf3d3084",
+      "platform": "claude-code",
+      "stars": 921,
+      "score": 0.648,
+      "tier": "usable"
+    },
+    {
+      "owner": "iamfakeguru",
+      "repo": "claude-md",
+      "sha": "4036d8039bb3eb4d0a43b410cee0244b6a8ee16e",
+      "platform": "claude-code",
+      "stars": 913,
+      "score": 0.623,
+      "tier": "usable"
+    },
+    {
+      "owner": "s-smits",
+      "repo": "agentic-cursorrules",
+      "sha": "f8df721ed0d5c9c00b2f2cadbed512dd24b779f0",
+      "platform": "cursor",
+      "stars": 376,
+      "score": 0.511,
+      "tier": "experimental"
+    },
+    {
+      "owner": "Robotti-io",
+      "repo": "copilot-security-instructions",
+      "sha": "0875363b9d0d6fb27f06aeb9551154789a6d48ac",
+      "platform": "copilot",
+      "stars": 39,
+      "score": 0.757,
+      "tier": "strong"
+    },
+    {
+      "owner": "he-yufeng",
+      "repo": "RuleForge",
+      "sha": "bd64e60bd00ae150235ec7d01a3ba77579eb262a",
+      "platform": "copilot",
+      "stars": 31,
+      "score": 0.589,
+      "tier": "usable"
+    },
+    {
+      "owner": "andreaswasita",
+      "repo": "copilot-agents-dojo",
+      "sha": "90a30bb1b2aabf490ed92e863e239b1363bd625b",
+      "platform": "copilot",
+      "stars": 29,
+      "score": 0.677,
+      "tier": "usable"
+    },
+    {
+      "owner": "CsabaKovacs",
+      "repo": "rulesmith",
+      "sha": "971db3cd70babd72dc62e2da683acc60e2edaacf",
+      "platform": "copilot",
+      "stars": 12,
+      "score": 0.655,
+      "tier": "usable"
+    },
+    {
+      "owner": "jonhill90",
+      "repo": "vibes",
+      "sha": "8ab8fd33955873ba92a86cc248d20e90315855e0",
+      "platform": "copilot",
+      "stars": 8,
+      "score": 0.817,
+      "tier": "strong"
     }
   ],
   "by_platform": {
-    "cursor": {
-      "count": 1,
-      "avg_score": 0.578,
+    "claude-code": {
+      "count": 7,
+      "avg_score": 0.604,
       "tiers": {
         "certified": 0,
         "strong": 0,
-        "usable": 1,
+        "usable": 7,
+        "experimental": 0
+      }
+    },
+    "cursor": {
+      "count": 4,
+      "avg_score": 0.569,
+      "tiers": {
+        "certified": 0,
+        "strong": 0,
+        "usable": 3,
+        "experimental": 1
+      }
+    },
+    "copilot": {
+      "count": 5,
+      "avg_score": 0.699,
+      "tiers": {
+        "certified": 0,
+        "strong": 2,
+        "usable": 3,
         "experimental": 0
       }
     }
   },
   "top_failures": [
-    "(no common failures found)"
+    "Prompt-injection and jailbreak guidance is missing",
+    "Model is not specified",
+    "Trigger description is vague"
   ],
   "top_passes": [
     "(no common passes found)"

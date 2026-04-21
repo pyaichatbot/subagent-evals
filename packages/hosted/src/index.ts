@@ -1032,6 +1032,7 @@ export interface StateOfAgentsRepo {
   repo: string;
   sha: string;
   platform: string;
+  stars?: number | null;
   score: number;
   tier: string;
 }
@@ -1077,6 +1078,7 @@ export function renderStateOfAgentsPage(
         <td class="rank">${String(i + 1).padStart(2, "0")}</td>
         <td class="repo"><a href="${escapeAttr(repoUrl)}" rel="noopener">${escapeHtml(r.owner)}/${escapeHtml(r.repo)}</a></td>
         <td>${escapeHtml(r.platform)}</td>
+        <td style="font-family:var(--mono);font-variant-numeric:tabular-nums">${r.stars == null ? "" : r.stars.toLocaleString("en-US")}</td>
         <td><span class="tier-pill" style="color:${tierColor(r.tier as BadgeTier)}">${escapeHtml(tierLabel(r.tier as BadgeTier))}</span></td>
         <td class="score" style="font-family:var(--mono)">${r.score.toFixed(3)}</td>
         <td style="font-family:var(--mono);font-size:.75rem;color:var(--muted)">${escapeHtml(r.sha.slice(0, 7))}</td>
@@ -1095,7 +1097,7 @@ export function renderStateOfAgentsPage(
   const content = `
     <p class="eyebrow">State of AI Agents</p>
     <h1 class="display">${escapeHtml(data.period)} Report</h1>
-    <p class="lede">We evaluated ${data.sample_size} public AI agent configs across Claude Code, Cursor, and Copilot. Here&#39;s what we found.</p>
+    <p class="lede">We evaluated ${data.sample_size} public AI agent config repositories selected from high-star GitHub search results across Claude Code, Cursor, and Copilot. Here&#39;s what we found.</p>
 
     <div class="grid" style="margin-bottom:2rem">
       <div class="stat"><p class="stat__label">Repos evaluated</p><p class="stat__value">${data.sample_size}</p></div>
@@ -1111,7 +1113,7 @@ export function renderStateOfAgentsPage(
 
     <h2 class="display">All Repos</h2>
     <table class="table" aria-label="Evaluated repositories">
-      <thead><tr><th>#</th><th>Repository</th><th>Platform</th><th>Tier</th><th style="text-align:right">Score</th><th>Commit</th></tr></thead>
+      <thead><tr><th>#</th><th>Repository</th><th>Platform</th><th>Stars</th><th>Tier</th><th style="text-align:right">Score</th><th>Commit</th></tr></thead>
       <tbody>${repoRows}</tbody>
     </table>
 

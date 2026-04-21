@@ -86,7 +86,7 @@ function runEval(repoDir) {
   }
 }
 
-const CAVEAT = "Sample of repos selected for activity and star count. Not a random sample. Results reflect these specific configs at pinned commits and may not generalize.";
+const CAVEAT = "Sample selected from the highest-starred public GitHub search results for CLAUDE.md, .cursorrules, copilot-instructions.md, and AGENTS.md. Only repos with supported agent config files discovered by subagent-evals are included. Results reflect pinned commits and may not generalize.";
 
 async function main() {
   const { reposFile, outputJson, outputMd } = parseArgs();
@@ -117,6 +117,7 @@ async function main() {
       repo: entry.repo,
       sha: entry.sha,
       platform: entry.platform,
+      stars: entry.stars ?? null,
       score: report.summary.score,
       tier: report.summary.badge,
       findings: report.static_results.flatMap((result) => result.findings ?? [])
@@ -150,7 +151,7 @@ async function main() {
   const failCounts = {};
   const passCounts = {};
   for (const f of allFindings) {
-    if (f.severity === "error" || f.severity === "warning") {
+    if (f.severity !== "info") {
       failCounts[f.title] = (failCounts[f.title] ?? 0) + 1;
     } else if (f.severity === "info") {
       passCounts[f.title] = (passCounts[f.title] ?? 0) + 1;
@@ -179,7 +180,7 @@ async function main() {
     .join("\n");
 
   const repoTable = data.repos
-    .map((r) => `| ${r.owner}/${r.repo} | ${r.platform} | ${r.tier} | ${r.score.toFixed(3)} | ${r.sha.slice(0, 7)} |`)
+    .map((r) => `| ${r.owner}/${r.repo} | ${r.platform} | ${r.stars ?? ""} | ${r.tier} | ${r.score.toFixed(3)} | ${r.sha.slice(0, 7)} |`)
     .join("\n");
 
   const md = `# State of AI Agents — ${data.period}
@@ -194,8 +195,8 @@ ${platformTable}
 
 ## All Repos
 
-| Repository | Platform | Tier | Score | Commit |
-|------------|----------|------|-------|--------|
+| Repository | Platform | Stars | Tier | Score | Commit |
+|------------|----------|-------|------|-------|--------|
 ${repoTable}
 
 ## Top Failures
