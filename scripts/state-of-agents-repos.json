@@ -1,0 +1,5 @@
+[
+  { "owner": "anthropics", "repo": "claude-code", "sha": "fe53778ed90fd971bf4ec78fa1f65ccf0536352f", "platform": "claude-code" },
+  { "owner": "getcursor", "repo": "cursor", "sha": "53a1e5adf5b0db7a08bbe47cf8be207c3740bce5", "platform": "cursor" },
+  { "owner": "github", "repo": "docs", "sha": "8102cd9bc707f9a49b7a5cd265a0fe24d88a2d87", "platform": "copilot" }
+]

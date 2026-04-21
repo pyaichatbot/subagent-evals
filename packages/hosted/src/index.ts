@@ -1071,14 +1071,17 @@ export function renderStateOfAgentsPage(
 
   const repoRows = data.repos
     .map(
-      (r, i) => `<tr>
+      (r, i) => {
+        const repoUrl = `https://github.com/${encodeURIComponent(r.owner)}/${encodeURIComponent(r.repo)}`;
+        return `<tr>
         <td class="rank">${String(i + 1).padStart(2, "0")}</td>
-        <td class="repo"><a href="https://github.com/${escapeHtml(r.owner)}/${escapeHtml(r.repo)}" rel="noopener">${escapeHtml(r.owner)}/${escapeHtml(r.repo)}</a></td>
+        <td class="repo"><a href="${escapeAttr(repoUrl)}" rel="noopener">${escapeHtml(r.owner)}/${escapeHtml(r.repo)}</a></td>
         <td>${escapeHtml(r.platform)}</td>
         <td><span class="tier-pill" style="color:${tierColor(r.tier as BadgeTier)}">${escapeHtml(tierLabel(r.tier as BadgeTier))}</span></td>
         <td class="score" style="font-family:var(--mono)">${r.score.toFixed(3)}</td>
         <td style="font-family:var(--mono);font-size:.75rem;color:var(--muted)">${escapeHtml(r.sha.slice(0, 7))}</td>
-      </tr>`
+      </tr>`;
+      }
     )
     .join("\n");
 
@@ -1090,7 +1093,6 @@ export function renderStateOfAgentsPage(
     .join("\n");
 
   const content = `
-  <div class="container">
     <p class="eyebrow">State of AI Agents</p>
     <h1 class="display">${escapeHtml(data.period)} Report</h1>
     <p class="lede">We evaluated ${data.sample_size} public AI agent configs across Claude Code, Cursor, and Copilot. Here&#39;s what we found.</p>
@@ -1125,8 +1127,7 @@ export function renderStateOfAgentsPage(
     </div>
 
     <hr class="rule" />
-    <p style="color:var(--muted);font-size:.85rem">${escapeHtml(data.caveat)}</p>
-  </div>`;
+    <p style="color:var(--muted);font-size:.85rem">${escapeHtml(data.caveat)}</p>`;
 
   return pageShell({
     title: `State of AI Agents ${escapeHtml(data.period)} — ${opts.siteName}`,

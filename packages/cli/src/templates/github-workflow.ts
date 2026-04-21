@@ -5,6 +5,7 @@ export interface GitHubWorkflowOptions {
 
 export function renderGitHubWorkflow(options: GitHubWorkflowOptions): string {
   const postComment = options.postComment !== false;
+  const resultsPath = "out/results.json";
   const minScoreCheck = options.minScore !== undefined
     ? `          if (r.summary.score < ${options.minScore}) process.exit(1);`
     : "";
@@ -12,7 +13,7 @@ export function renderGitHubWorkflow(options: GitHubWorkflowOptions): string {
   const commentSteps = postComment ? `
       - name: Generate PR comment
         if: always()
-        run: subagent-evals comment --current results.json --output comment.md
+        run: subagent-evals comment --current ${resultsPath} --output comment.md
       - name: Post PR comment
         if: always()
         run: gh pr comment "\${{ github.event.number }}" --body-file comment.md
@@ -42,15 +43,17 @@ jobs:
       - name: Run eval
         # If subagent-evals.config.yaml is missing, eval auto-discovers agent files.
         # Run \`subagent-evals init\` locally to create one.
-        run: subagent-evals eval --output results.json
+        run: subagent-evals eval
         env:
           ANTHROPIC_API_KEY: \${{ secrets.ANTHROPIC_API_KEY }}
       - name: Generate badge
-        run: subagent-evals badge --input results.json --write
+        if: always()
+        run: subagent-evals badge --input ${resultsPath} --write
       - name: Check threshold
+        if: always()
         run: |
           node -e "
-            const r = require('./results.json');
+            const r = require('./${resultsPath}');
             if (r.summary.badge === 'experimental') process.exit(1);
 ${minScoreCheck}
           "
@@ -59,7 +62,7 @@ ${commentSteps}
         if: always()
         run: |
           STATUS=$(node -e "
-            const r=require('./results.json');
+            const r=require('./${resultsPath}');
             const state=r.summary.badge==='experimental'?'failure':'success';
             console.log(JSON.stringify({state,description:'subagent-evals: '+r.summary.badge+' (score='+r.summary.score.toFixed(3)+')',context:'subagent-evals'}));
           ")

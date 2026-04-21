@@ -8,6 +8,9 @@
       "path": "./packages/report-html"
     },
     {
+      "path": "./packages/hosted"
+    },
+    {
       "path": "./packages/cli"
     }
   ]

@@ -6,16 +6,17 @@ export interface GitLabCiOptions {
 
 export function renderGitLabCi(options: GitLabCiOptions): string {
   const postComment = options.postComment !== false;
+  const resultsPath = "out/results.json";
   const apiBase = options.gitlabUrl
     ? `${options.gitlabUrl.replace(/\/$/, "")}/api/v4`
     : "\${CI_API_V4_URL}";
 
   const minScoreCheck = options.minScore !== undefined
-    ? `    - node -e "const r=require('./results.json'); if(r.summary.score<${options.minScore}) process.exit(1);"`
+    ? `    - node -e "const r=require('./${resultsPath}'); if(r.summary.score<${options.minScore}) process.exit(1);"`
     : "";
 
   const commentStep = postComment ? `
-    - subagent-evals comment --current results.json --output comment.md
+    - subagent-evals comment --current ${resultsPath} --output comment.md
     - |
       BODY=$(cat comment.md | python3 -c "import sys,json; print(json.dumps({'body': sys.stdin.read()}))")
       curl -s --request POST \\
@@ -31,9 +32,9 @@ export function renderGitLabCi(options: GitLabCiOptions): string {
   script:
     - npm install -g subagent-evals@latest
     # If subagent-evals.config.yaml is missing, eval auto-discovers agent files.
-    - subagent-evals eval --output results.json
-    - subagent-evals badge --input results.json --write
-    - node -e "const r=require('./results.json'); if(r.summary.badge==='experimental') process.exit(1);"
+    - subagent-evals eval
+    - subagent-evals badge --input ${resultsPath} --write
+    - node -e "const r=require('./${resultsPath}'); if(r.summary.badge==='experimental') process.exit(1);"
 ${minScoreCheck}${commentStep}
   variables:
     ANTHROPIC_API_KEY: ""   # set in GitLab CI/CD Variables (Settings > CI/CD > Variables)

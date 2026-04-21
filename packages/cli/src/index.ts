@@ -32,6 +32,8 @@ import {
   type HostedMerkleSnapshot
 } from "@subagent-evals/hosted";
 import { renderHtmlReport } from "@subagent-evals/report-html";
+import { renderGitHubWorkflow } from "./templates/github-workflow.js";
+import { renderGitLabCi } from "./templates/gitlab-ci.js";
 
 async function ensureDir(path: string): Promise<void> {
   await mkdir(path, { recursive: true });
@@ -91,6 +93,14 @@ Produce a short summary with decisions, risks, and next steps.
 
 function resolveCommandCwd(target: string | undefined, cwdOption: string | undefined): string {
   return resolve(cwdOption ?? target ?? process.cwd());
+}
+
+function parseOptionalScore(value: string): number {
+  const score = Number.parseFloat(value);
+  if (!Number.isFinite(score) || score < 0 || score > 1) {
+    throw new Error("--min-score must be a number between 0 and 1");
+  }
+  return score;
 }
 
 export async function runCli(argv: string[]): Promise<void> {
@@ -653,6 +663,75 @@ export async function runCli(argv: string[]): Promise<void> {
         process.exitCode = 1;
       }
     });
+
+  const ciCmd = new Command("ci");
+  ciCmd.addCommand(
+    new Command("init")
+      .argument("[target]", "directory to write workflow into")
+      .option("--cwd <cwd>", "working directory override")
+      .option("--platform <platform>", "github or gitlab")
+      .option("--gitlab-url <url>", "self-hosted GitLab base URL")
+      .option("--min-score <n>", "fail CI if score is below this value", parseOptionalScore)
+      .option("--post-comment / --no-post-comment", "post PR/MR comment", true)
+      .option("--force", "overwrite existing workflow file", false)
+      .option("--dry-run", "print to stdout without writing", false)
+      .option("-y, --yes", "confirm destructive overwrites", false)
+      .action(async (target, options) => {
+        const cwd = resolveCommandCwd(target, options.cwd);
+        let platform = options.platform as "github" | "gitlab" | undefined;
+        if (platform !== undefined && platform !== "github" && platform !== "gitlab") {
+          throw new Error("Invalid --platform. Use github or gitlab.");
+        }
+        if (!platform) {
+          if (existsSync(join(cwd, ".github"))) {
+            platform = "github";
+          } else if (existsSync(join(cwd, ".gitlab-ci.yml"))) {
+            platform = "gitlab";
+          } else {
+            throw new Error("Cannot detect platform. Use --platform github or --platform gitlab.");
+          }
+        }
+
+        const outPath =
+          platform === "github"
+            ? join(cwd, ".github", "workflows", "subagent-evals.yml")
+            : join(cwd, ".gitlab-ci.yml");
+        if (existsSync(outPath) && !options.dryRun) {
+          if (!options.force) {
+            throw new Error(`Workflow file already exists at ${outPath}. Use --force to overwrite.`);
+          }
+          if (platform === "gitlab" && !options.yes) {
+            throw new Error(".gitlab-ci.yml is your project's primary pipeline. Use --force --yes to overwrite.");
+          }
+        }
+
+        const content =
+          platform === "github"
+            ? renderGitHubWorkflow({
+                minScore: options.minScore,
+                postComment: options.postComment !== false
+              })
+            : renderGitLabCi({
+                minScore: options.minScore,
+                postComment: options.postComment !== false,
+                gitlabUrl: options.gitlabUrl
+              });
+
+        if (options.dryRun) {
+          process.stdout.write(content);
+          return;
+        }
+
+        await writeText(outPath, content);
+        process.stdout.write(`Generated: ${outPath}\n`);
+        if (platform === "github") {
+          process.stdout.write("Next: add ANTHROPIC_API_KEY in repo Settings > Secrets and variables > Actions.\n");
+        } else {
+          process.stdout.write("Next: add ANTHROPIC_API_KEY and GITLAB_TOKEN in Settings > CI/CD > Variables.\n");
+        }
+      })
+  );
+  program.addCommand(ciCmd);
 
   await program.parseAsync(argv, { from: "user" });
 }

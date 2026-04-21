@@ -10,6 +10,9 @@ out
 *.local
 *.tsbuildinfo
 apps/hosted/data
+!apps/hosted/data/
+apps/hosted/data/*
+!apps/hosted/data/state-of-agents.json
 docs/superpowers/
 .video-temp/
 .video-temp-intro/

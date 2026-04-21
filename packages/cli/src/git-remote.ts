@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 
 export interface RemoteInfo {
   platform: "github" | "gitlab";
@@ -13,8 +13,8 @@ export function parseRemoteUrl(url: string): RemoteInfo | null {
 
   const sshMatch = url.match(/^git@([^:]+):(.+)$/);
   if (sshMatch) {
-    host = sshMatch[1];
-    pathPart = sshMatch[2];
+    host = sshMatch[1]!;
+    pathPart = sshMatch[2]!;
   } else {
     try {
       const parsed = new URL(url);
@@ -28,11 +28,11 @@ export function parseRemoteUrl(url: string): RemoteInfo | null {
   if (!host || !pathPart) return null;
 
   pathPart = pathPart.replace(/\.git$/, "");
-  const segments = pathPart.split("/").filter(Boolean);
+  const segments = pathPart.split("/").filter(Boolean).map(decodeURIComponent);
   if (segments.length < 2) return null;
 
-  const repo = segments[segments.length - 1];
-  const owner = segments[segments.length - 2];
+  const repo = segments[segments.length - 1]!;
+  const owner = segments[segments.length - 2]!;
 
   const platform: "github" | "gitlab" = host === "github.com" ? "github" : "gitlab";
 
@@ -41,7 +41,12 @@ export function parseRemoteUrl(url: string): RemoteInfo | null {
 
 export function getGitRemoteUrl(cwd: string): string | null {
   try {
-    return execSync("git remote get-url origin", { cwd, encoding: "utf8" }).trim();
+    return execFileSync("git", ["remote", "get-url", "origin"], {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 5000
+    }).trim();
   } catch {
     return null;
   }
@@ -49,9 +54,24 @@ export function getGitRemoteUrl(cwd: string): string | null {
 
 export function getGitBranch(cwd: string): string {
   try {
-    return execSync("git symbolic-ref --short HEAD", { cwd, encoding: "utf8" }).trim();
+    return execFileSync("git", ["symbolic-ref", "--short", "HEAD"], {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 5000
+    }).trim();
   } catch {
-    return "main";
+    try {
+      const ref = execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+        cwd,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+        timeout: 5000
+      }).trim();
+      return ref === "HEAD" ? "main" : ref;
+    } catch {
+      return "main";
+    }
   }
 }
 
@@ -61,13 +81,16 @@ export function buildBadgeUrl(
   gitlabUrl?: string
 ): string {
   const filename = "subagent-evals-badge.json";
+  const encodedOwner = encodeURIComponent(info.owner);
+  const encodedRepo = encodeURIComponent(info.repo);
+  const encodedBranch = encodeURIComponent(branch);
   let rawUrl: string;
 
   if (info.platform === "github") {
-    rawUrl = `https://raw.githubusercontent.com/${info.owner}/${info.repo}/${branch}/${filename}`;
+    rawUrl = `https://raw.githubusercontent.com/${encodedOwner}/${encodedRepo}/${encodedBranch}/${filename}`;
   } else {
     const base = (gitlabUrl ?? `https://${info.host}`).replace(/\/$/, "");
-    rawUrl = `${base}/${info.owner}/${info.repo}/-/raw/${branch}/${filename}`;
+    rawUrl = `${base}/${encodedOwner}/${encodedRepo}/-/raw/${encodedBranch}/${filename}`;
   }
 
   return `https://img.shields.io/endpoint?url=${encodeURIComponent(rawUrl)}`;

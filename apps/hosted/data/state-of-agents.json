@@ -1,0 +1,34 @@
+{
+  "period": "2026-Q2",
+  "generated": "2026-04-21T05:48:16.244Z",
+  "sample_size": 1,
+  "caveat": "Sample of repos selected for activity and star count. Not a random sample. Results reflect these specific configs at pinned commits and may not generalize.",
+  "repos": [
+    {
+      "owner": "getcursor",
+      "repo": "cursor",
+      "sha": "53a1e5adf5b0db7a08bbe47cf8be207c3740bce5",
+      "platform": "cursor",
+      "score": 0.578,
+      "tier": "usable"
+    }
+  ],
+  "by_platform": {
+    "cursor": {
+      "count": 1,
+      "avg_score": 0.578,
+      "tiers": {
+        "certified": 0,
+        "strong": 0,
+        "usable": 1,
+        "experimental": 0
+      }
+    }
+  },
+  "top_failures": [
+    "(no common failures found)"
+  ],
+  "top_passes": [
+    "(no common passes found)"
+  ]
+}
